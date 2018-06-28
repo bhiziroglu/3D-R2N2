@@ -2,7 +2,6 @@ import tensorflow as tf
 import voxel
 import numpy as np
 
-
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
 n_gru_vox = 4
@@ -30,10 +29,11 @@ def initialize_weights():
 
     ## GRU PART ##
     w16 = tf.Variable(tf.truncated_normal([1024,8192], stddev=0.5), name="w16") # Encoder FC output to 5D Tensor
+    w17 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w17")
+    w18 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w18")
+    w19 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w19")
 
-
-
-    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16]
+    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16, w17, w18, w19]
 
     return w
 
@@ -70,6 +70,8 @@ def train(w,x_train,y_train):
         tmp = gru(w,tmp,prev_s)
         print("GRU FINISHED")
         print(tmp.shape)
+        tmp = decoder(w,tmp)
+
 
 
 
@@ -146,46 +148,32 @@ def encoder(w,ims):
 
 
 def gru(w,x_curr, prev_s):
-    '''       kernel = tf.Variable(
-            init([K, K, K, in_featurevoxel_count, out_featurevoxel_count]), name="kernel")
-        bias = tf.Variable(init([out_featurevoxel_count]), name="bias")
-        ret = tf.nn.bias_add(tf.nn.conv3d(
-            vox, kernel, S, padding=P, dilations=D, name="conv3d"), bias)
-    '''
-
-    ''' TODO : Broadcast-dot product or matmul ??'''
-    #fc_layer = tf.Variable(tf.truncated_normal([1,1024], stddev=0.5), name="s1")
-
-    print("Iteration no:",x_curr.shape[0])
 
     x_t = x_curr[0:1,:] # -> Take a single picture out of 24 pictures
 
     if(x_t.shape[0]==0): # Return output if images are finished.
         return prev_s
+   
+    #print("Iteration no:",x_curr.shape[0])
 
-
+    ''' TODO : Broadcast-dot product or matmul ??'''
     fc_layer = tf.matmul(x_t,w[16]) #[1,1024]x[1024,8192]
     fc_layer = tf.reshape(fc_layer,[-1,4,128,4,4]) #[1,4,128,4,4]
 
-
-    #kernel1 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k1")
-    kernel1 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k1")
-    update_gate = tf.nn.conv3d(prev_s,kernel1,strides=[1,1,1,1,1],padding="SAME")
+    update_gate = tf.nn.conv3d(prev_s,w[17],strides=[1,1,1,1,1],padding="SAME")
 
     update_gate = update_gate + fc_layer
     update_gate = tf.sigmoid(update_gate)
 
     complement_update_gate = tf.subtract(tf.ones_like(update_gate),update_gate)
 
-    kernel2 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k2")
-    reset_gate = tf.nn.conv3d(prev_s,kernel2,strides=[1,1,1,1,1],padding="SAME")
+    reset_gate = tf.nn.conv3d(prev_s,w[18],strides=[1,1,1,1,1],padding="SAME")
     reset_gate = reset_gate + fc_layer
     reset_gate = tf.sigmoid(reset_gate)
 
     rs = tf.multiply(reset_gate,prev_s) # Element-wise multiply
 
-    kernel3 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k1")
-    tanh_reset = tf.nn.conv3d(rs,kernel3,strides=[1,1,1,1,1],padding="SAME")
+    tanh_reset = tf.nn.conv3d(rs,w[19],strides=[1,1,1,1,1],padding="SAME")
     tanh_reset = tf.tanh(tanh_reset)
 
     gru_out = tf.add(
@@ -196,3 +184,37 @@ def gru(w,x_curr, prev_s):
     return gru(w,x_curr[1:,:],gru_out)
 
     
+def decoder(w,s):
+    print()
+    #d = tf.Variable(tf.zeros_like(
+    #        tf.truncated_normal([2,2], stddev=0.5)), name="prev_s")
+    #sd2 = tf.Variable(tf.zeros_like(
+    #        tf.truncated_normal([8192,1,1,1], stddev=0.5)), name="prev_s")
+    #sd2 = tf.cast(sd2,tf.int64)
+    
+    s = unpool(s)
+    
+
+    #reset_gate = tf.nn.conv3d(prev_s,w[18],strides=[1,1,1,1,1],padding="SAME")
+    #w19 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w19")
+
+    #conv7a = 
+    #asd = tf.reshape(asd,[1])
+    print("XDXDXDXDXD")
+    print(s.shape)
+    
+def unpool(value):
+    """
+    :param value: A Tensor of shape [b, d0, d1, ..., dn, ch]
+    :return: A Tensor of shape [b, 2*d0, 2*d1, ..., 2*dn, ch]
+    """
+    value = tf.transpose(value,perm=[0,1,3,4,2]) # [(1, 4, 4, 4, 128)]
+    sh = value.get_shape().as_list()
+    dim = len(sh[1:-1])
+    out = (tf.reshape(value, [-1] + sh[-dim:]))
+    for i in range(dim, 0, -1):
+        out = tf.concat([out, tf.zeros_like(out)], i)
+    out_size = [-1] + [s * 2 for s in sh[1:-1]] + [sh[-1]]
+    out = tf.reshape(out, out_size)
+    out = tf.transpose(out,perm=[0,1,4,3,2]) # [(1, 4, 4, 4, 128)]
+    return out
