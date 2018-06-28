@@ -33,7 +33,23 @@ def initialize_weights():
     w18 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w18")
     w19 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w19")
 
-    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16, w17, w18, w19]
+
+    ## DECODER PART ##
+    w20 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[1],n_deconvfilter[1]], stddev=0.5), name="w20")
+    w21 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[1],n_deconvfilter[1]], stddev=0.5), name="w21")
+    w22 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[1],n_deconvfilter[2]], stddev=0.5), name="w22")
+    w23 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[2],n_deconvfilter[2]], stddev=0.5), name="w23")
+    w24 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[2],n_deconvfilter[3]], stddev=0.5), name="w24")
+    w25 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[3],n_deconvfilter[3]], stddev=0.5), name="w25")
+    w26 = tf.Variable(tf.truncated_normal([1,1,1,n_deconvfilter[2],n_deconvfilter[3]], stddev=0.5), name="w26")
+    w27 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[3],n_deconvfilter[4]], stddev=0.5), name="w27")
+    w28 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[4],n_deconvfilter[4]], stddev=0.5), name="w28")
+    w29 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[4],n_deconvfilter[4]], stddev=0.5), name="w29")
+    w30 = tf.Variable(tf.truncated_normal([3,3,3,n_deconvfilter[4],n_deconvfilter[5]], stddev=0.5), name="w30")
+
+    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10,
+     w11, w12, w13, w14, w15, w16, w17, w18, w19, w20,
+     w21, w22, w23, w24, w25, w26, w27, w28, w29, w30]
 
     return w
 
@@ -68,9 +84,9 @@ def train(w,x_train,y_train):
             tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)), name="prev_s")
         tmp = encoder(w,ims)
         tmp = gru(w,tmp,prev_s)
-        print("GRU FINISHED")
-        print(tmp.shape)
         tmp = decoder(w,tmp)
+        print("DECODER FINISHED")
+        print(tmp.shape)
 
 
 
@@ -188,90 +204,54 @@ def gru(w,x_curr, prev_s):
     
 def decoder(w,s):
     
-    ''' TODO : 
-    2nd, 4th and 5th dimensions of weight matrices may be smaller.
-    Decrease them if possible.
-    '''
     s = tf.transpose(s,perm=[0,1,4,3,2]) # [(1, 4, 128, 4, 4)] -> [(1, 4, 4, 4, 128)]
     unpool7 = unpool(s)
 
-    kernel1 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(unpool7.shape[4]),n_deconvfilter[1]], stddev=0.5)), name="prev_s21")
-    conv7a = tf.nn.conv3d(unpool7,kernel1,strides=[1,1,1,1,1],padding="SAME")
+    conv7a = tf.nn.conv3d(unpool7,w[20],strides=[1,1,1,1,1],padding="SAME")
     conv7a = tf.nn.leaky_relu(conv7a)
 
-
-    kernel2 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(conv7a.shape[4]),n_deconvfilter[1]], stddev=0.5)), name="prev_s21")
-    conv7b = tf.nn.conv3d(conv7a,kernel2,strides=[1,1,1,1,1],padding="SAME")
+    conv7b = tf.nn.conv3d(conv7a,w[21],strides=[1,1,1,1,1],padding="SAME")
     conv7b = tf.nn.leaky_relu(conv7b)
     res7 = tf.add(unpool7,conv7b)
 
     unpool8 = unpool(res7)
 
-    kernel3 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(unpool8.shape[4]),n_deconvfilter[2]], stddev=0.5)), name="prev_s21")
-    conv8a = tf.nn.conv3d(unpool8,kernel3,strides=[1,1,1,1,1],padding="SAME")
+    conv8a = tf.nn.conv3d(unpool8,w[22],strides=[1,1,1,1,1],padding="SAME")
     conv8a = tf.nn.leaky_relu(conv8a)   
 
-    kernel4 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(conv8a.shape[4]),n_deconvfilter[2]], stddev=0.5)), name="prev_s21")
-    conv8b = tf.nn.conv3d(conv8a,kernel4,strides=[1,1,1,1,1],padding="SAME")
+    conv8b = tf.nn.conv3d(conv8a,w[23],strides=[1,1,1,1,1],padding="SAME")
     conv8b = tf.nn.leaky_relu(conv8b)    
     res8 = tf.add(unpool8,conv8b)
 
-
     unpool9 = unpool(res8)
 
-
-    kernel5 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(unpool9.shape[4]),n_deconvfilter[3]], stddev=0.5)), name="prev_s21")
-    conv9a = tf.nn.conv3d(unpool9,kernel5,strides=[1,1,1,1,1],padding="SAME")
+    conv9a = tf.nn.conv3d(unpool9,w[24],strides=[1,1,1,1,1],padding="SAME")
     conv9a = tf.nn.leaky_relu(conv9a)   
 
-    kernel6 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(conv9a.shape[4]),n_deconvfilter[3]], stddev=0.5)), name="prev_s21")
-    conv9b = tf.nn.conv3d(conv9a,kernel6,strides=[1,1,1,1,1],padding="SAME")
+    conv9b = tf.nn.conv3d(conv9a,w[25],strides=[1,1,1,1,1],padding="SAME")
     conv9b = tf.nn.leaky_relu(conv9b)  
 
-    kernel7 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([1,1,1,int(unpool9.shape[4]),n_deconvfilter[3]], stddev=0.5)), name="prev_s21")
-    conv9c = tf.nn.conv3d(unpool9,kernel7,strides=[1,1,1,1,1],padding="SAME")
-
+    conv9c = tf.nn.conv3d(unpool9,w[26],strides=[1,1,1,1,1],padding="SAME")
 
     res9 = tf.add(conv9c,conv9b)
 
-    kernel8 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(res9.shape[4]),n_deconvfilter[4]], stddev=0.5)), name="prev_s21")
-    conv10a = tf.nn.conv3d(res9,kernel8,strides=[1,1,1,1,1],padding="SAME")
+    conv10a = tf.nn.conv3d(res9,w[27],strides=[1,1,1,1,1],padding="SAME")
     conv10a = tf.nn.leaky_relu(conv10a)  
     
-    
-    kernel9 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(conv10a.shape[4]),n_deconvfilter[4]], stddev=0.5)), name="prev_s21")
-    conv10b = tf.nn.conv3d(conv10a,kernel9,strides=[1,1,1,1,1],padding="SAME")
+    conv10b = tf.nn.conv3d(conv10a,w[28],strides=[1,1,1,1,1],padding="SAME")
     conv10b = tf.nn.leaky_relu(conv10b)  
-    print("conv10b")
-    print(conv10b.shape)
 
-    kernel10 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(conv10a.shape[4]),n_deconvfilter[4]], stddev=0.5)), name="prev_s21")
-    conv10c = tf.nn.conv3d(conv10a,kernel10,strides=[1,1,1,1,1],padding="SAME")
+    conv10c = tf.nn.conv3d(conv10a,w[29],strides=[1,1,1,1,1],padding="SAME")
     conv10c = tf.nn.leaky_relu(conv10c)  
 
     res10 = tf.add(conv10c,conv10b)
 
-    kernel11 = tf.Variable(tf.zeros_like(
-        tf.truncated_normal([3,3,3,int(res10.shape[4]),n_deconvfilter[5]], stddev=0.5)), name="prev_s21")
-    conv11a = tf.nn.conv3d(res10,kernel11,strides=[1,1,1,1,1],padding="SAME")
+    conv11a = tf.nn.conv3d(res10,w[30],strides=[1,1,1,1,1],padding="SAME")
     conv11a = tf.nn.leaky_relu(conv11a)  
 
-    print("conv11a")
-    print(conv11a.shape)
+    return conv11a
 
-    #reset_gate = tf.nn.conv3d(prev_s,w[18],strides=[1,1,1,1,1],padding="SAME")
-    #w19 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="w19")
-    
+
 def unpool(value):
     """
     :param value: A Tensor of shape [b, d0, d1, ..., dn, ch]
