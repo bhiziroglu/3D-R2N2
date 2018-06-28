@@ -3,6 +3,43 @@ import voxel
 import numpy as np
 
 
+n_convfilter = [96, 128, 256, 256, 256, 256]
+n_deconvfilter = [128, 128, 128, 64, 32, 2]
+n_gru_vox = 4
+n_fc_filters = [1024]
+
+def initialize_weights():
+    
+    ## ENCODER PART ##
+    w0 = tf.Variable(tf.truncated_normal([7,7,3,n_convfilter[0]], stddev=0.5),name="w0")
+    w1 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[0],n_convfilter[0]], stddev=0.5), name="w1")
+    w2 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[0],n_convfilter[1]], stddev=0.5), name="w2")
+    w3 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[1],n_convfilter[1]], stddev=0.5), name="w3")
+    w4 = tf.Variable(tf.truncated_normal([1,1,n_convfilter[0],n_convfilter[1]], stddev=0.5), name="w4")
+    w5 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[1],n_convfilter[2]], stddev=0.5), name="w5")
+    w6 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[2],n_convfilter[2]], stddev=0.5), name="w6")
+    w7 = tf.Variable(tf.truncated_normal([1,1,n_convfilter[1],n_convfilter[2]], stddev=0.5), name="w7")
+    w8 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[2],n_convfilter[3]], stddev=0.5), name="w8")
+    w9 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[3],n_convfilter[3]], stddev=0.5), name="w9")
+    w10 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[3],n_convfilter[4]], stddev=0.5), name="w10")
+    w11 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[4],n_convfilter[4]], stddev=0.5), name="w11")
+    w12 = tf.Variable(tf.truncated_normal([1,1,n_convfilter[4],n_convfilter[4]], stddev=0.5), name="w12")
+    w13 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[4],n_convfilter[5]], stddev=0.5), name="w13")
+    w14 = tf.Variable(tf.truncated_normal([3,3,n_convfilter[5],n_convfilter[5]], stddev=0.5), name="w14")
+    w15 = tf.Variable(tf.truncated_normal([n_fc_filters[0]]), name="w15")
+
+    ## GRU PART ##
+    w16 = tf.Variable(tf.truncated_normal([1024,8192], stddev=0.5), name="w16") # Encoder FC output to 5D Tensor
+
+
+
+    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16]
+
+    return w
+
+
+
+
 
 def predict(w,image):
     #pred = tf.random_uniform([1, 32, 2, 32, 32])
@@ -24,8 +61,14 @@ def train(w,x_train,y_train):
         for image in x_train[images]:
             #image = tf.convert_to_tensor(image) # (127,127,3)
             #image = tf.reshape(image,[3,127,127])
-            ims.append(image)   
+            ims.append(image) 
+
+        # Initial empty GRU inputs
+        prev_s = tf.Variable(tf.zeros_like(
+            tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)), name="prev_s")
         tmp = encoder(w,ims)
+        tmp = gru(w,tmp,prev_s)
+        print("GRU FINISHED")
         print(tmp.shape)
 
 
@@ -41,20 +84,11 @@ def loss(w,x,y):
 
 def encoder(w,ims):
     # (multi_views, self.batch_size, 3, self.img_h, self.img_w),
-    img_w = 127
-    img_h = 127
-    n_gru_vox = 4
-    # n_vox = self.n_vox
-
-    n_convfilter = [96, 128, 256, 256, 256, 256]
-    n_fc_filters = [1024]
-    n_deconvfilter = [128, 128, 128, 64, 32, 2]
-    input_shape = (1, 3, img_w, img_h) # (batchsize, rgb, width , height)
-
+    #input_shape = (1, 3, img_w, img_h) # (batchsize, rgb, width , height)
 
     # Input Layer
     ims = tf.convert_to_tensor(ims) # 24 Images are stored in a list, convert them to Tensor
-    ims = ims[0:1,:,:,:] # Take out 1 image
+    #ims = ims[0:1,:,:,:] # Take out 1 image
     #ims = tf.transpose(ims,[0,3,1,2]) # (1, rgb, width, height) -> Take RGB to beginning
     input_layer = tf.cast(ims, tf.float32)
 
@@ -110,3 +144,55 @@ def encoder(w,ims):
 
     return fc7
 
+
+def gru(w,x_curr, prev_s):
+    '''       kernel = tf.Variable(
+            init([K, K, K, in_featurevoxel_count, out_featurevoxel_count]), name="kernel")
+        bias = tf.Variable(init([out_featurevoxel_count]), name="bias")
+        ret = tf.nn.bias_add(tf.nn.conv3d(
+            vox, kernel, S, padding=P, dilations=D, name="conv3d"), bias)
+    '''
+
+    ''' TODO : Broadcast-dot product or matmul ??'''
+    #fc_layer = tf.Variable(tf.truncated_normal([1,1024], stddev=0.5), name="s1")
+
+    print("Iteration no:",x_curr.shape[0])
+
+    x_t = x_curr[0:1,:] # -> Take a single picture out of 24 pictures
+
+    if(x_t.shape[0]==0): # Return output if images are finished.
+        return prev_s
+
+
+    fc_layer = tf.matmul(x_t,w[16]) #[1,1024]x[1024,8192]
+    fc_layer = tf.reshape(fc_layer,[-1,4,128,4,4]) #[1,4,128,4,4]
+
+
+    #kernel1 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k1")
+    kernel1 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k1")
+    update_gate = tf.nn.conv3d(prev_s,kernel1,strides=[1,1,1,1,1],padding="SAME")
+
+    update_gate = update_gate + fc_layer
+    update_gate = tf.sigmoid(update_gate)
+
+    complement_update_gate = tf.subtract(tf.ones_like(update_gate),update_gate)
+
+    kernel2 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k2")
+    reset_gate = tf.nn.conv3d(prev_s,kernel2,strides=[1,1,1,1,1],padding="SAME")
+    reset_gate = reset_gate + fc_layer
+    reset_gate = tf.sigmoid(reset_gate)
+
+    rs = tf.multiply(reset_gate,prev_s) # Element-wise multiply
+
+    kernel3 = tf.Variable(tf.truncated_normal([3,3,3,n_gru_vox,n_gru_vox], stddev=0.5), name="k1")
+    tanh_reset = tf.nn.conv3d(rs,kernel3,strides=[1,1,1,1,1],padding="SAME")
+    tanh_reset = tf.tanh(tanh_reset)
+
+    gru_out = tf.add(
+        tf.multiply(update_gate,prev_s),
+        tf.multiply(complement_update_gate,tanh_reset)
+    )
+
+    return gru(w,x_curr[1:,:],gru_out)
+
+    
