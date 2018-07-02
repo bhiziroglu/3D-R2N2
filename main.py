@@ -22,14 +22,15 @@ def main():
 
     w = net.initialize_weights()
     x_train = dataset.train_data()
+    #print(x_train)
     y_train = dataset.train_labels()
     #print(len(x_train))
     net.train(w,x_train,y_train) # Train the network
 
     del x_train
-    del y_train
-    del args
-    del w
+    #del y_train
+    #del args
+    #del w
 
 
 
