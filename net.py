@@ -101,13 +101,14 @@ def train(w,x_train,y_train):
 def loss(x,y):
     y = tf.convert_to_tensor(y)
     y = tf.cast(y,tf.float32)
-    l = tf.nn.softmax_cross_entropy_with_logits(labels=x[0,:,:,:,1],logits=y)
+    l = tf.nn.softmax_cross_entropy_with_logits(logits=x[0,:,:,:,1],labels=y)
     '''TODO: Figure out:
         tf.nn.softmax_cross_entropy_with_logits 
             OR
         tf.nn.softmax_cross_entropy_with_logits_v2
     '''
-    return tf.metrics.mean(l)
+    #return tf.metrics.mean(l)
+    return tf.reduce_mean(l)
 
 
 
