@@ -91,8 +91,6 @@ def train(w,x_train,y_train):
         tmp = encoder(w,ims)
         tmp = gru(w,tmp,prev_s)
         tmp = decoder(w,tmp)
-        print("DECODER FINISHED")
-        print(tmp.shape)
         l = loss(tmp,y_train[images])
         tf.summary.histogram('loss', l)
 
