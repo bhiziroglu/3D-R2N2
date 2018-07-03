@@ -16,7 +16,10 @@ def train_labels():
     for label in label_dir:
         binv = open('./03211117_labelsR/'+label+'/model.binvox','rb')
         binvox_data = binvox_rw.read_as_3d_array(binv).data # binvox_data is 32x32x32
-        y_train[label] = np.asarray(binvox_data)
+        #y_train[label] = np.asarray(binvox_data)
+        tmp = tf.convert_to_tensor(binvox_data)
+        tmp = tf.cast(tmp,tf.float32)
+        y_train[label] = tmp
 
     return y_train
         

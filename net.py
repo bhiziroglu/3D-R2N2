@@ -72,6 +72,8 @@ def predict(w,image):
     return pred
 
 
+
+
 def train(w,x_train,y_train):
     print()
     '''Do nothing'''
@@ -85,21 +87,28 @@ def train(w,x_train,y_train):
         # Initial empty GRU inputs
         prev_s = tf.Variable(tf.zeros_like(
             tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)), name="prev_s")
+        
         tmp = encoder(w,ims)
         tmp = gru(w,tmp,prev_s)
         tmp = decoder(w,tmp)
         print("DECODER FINISHED")
         print(tmp.shape)
+        l = loss(tmp,y_train[images])
+        tf.summary.histogram('loss', l)
 
 
 
+def loss(x,y):
+    y = tf.convert_to_tensor(y)
+    y = tf.cast(y,tf.float32)
+    l = tf.nn.softmax_cross_entropy_with_logits(labels=x[0,:,:,:,1],logits=y)
+    '''TODO: Figure out:
+        tf.nn.softmax_cross_entropy_with_logits 
+            OR
+        tf.nn.softmax_cross_entropy_with_logits_v2
+    '''
+    return tf.metrics.mean(l)
 
-def loss(w,x,y):
-    #w []
-    #x [127,127,3]
-    #y [32,32,32]
-    pred = predict(w,x) # [32,32,32]
-    return 1 # [1,32,2,32,32] -> Only take voxel values
 
 
 
@@ -108,11 +117,10 @@ def encoder(w,ims):
     '''TODO: 
     Add leaky relus after each convolution layer
     '''
-
+    
     # Input Layer
     ims = tf.convert_to_tensor(ims) # 24 Images are stored in a list, convert them to Tensor
-    #ims = ims[0:1,:,:,:] # Take out 1 image
-    #ims = tf.transpose(ims,[0,3,1,2]) # (1, rgb, width, height) -> Take RGB to beginning
+    #X = ims #Placeholder
     input_layer = tf.cast(ims, tf.float32)
 
     # Convolutional Layer #1
@@ -156,7 +164,7 @@ def encoder(w,ims):
     conv6b = tf.nn.conv2d(input=conv6a,filter=w[14],strides=[1,1,1,1],padding="SAME")
     pool6 = tf.nn.max_pool(conv6b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
     ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
-   
+    
     # Flatten Layer
     flat7 = tf.reshape(pool6,[pool6.shape[0],-1])
     ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
