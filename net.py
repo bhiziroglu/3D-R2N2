@@ -10,45 +10,49 @@ n_fc_filters = [1024]
 def initialize_weights():
     
     ## ENCODER PART ##
-    w0 = tf.Variable(tf.contrib.layers.xavier_initializer()((7,7,3,n_convfilter[0])), name="w0")
-    w1 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[0])), name="w1")
-    w2 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[1])), name="w2")
-    w3 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[1])), name="w3")
-    w4 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[0],n_convfilter[1])), name="w4")
-    w5 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[2])), name="w5")
-    w6 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[2])), name="w6")
-    w7 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[1],n_convfilter[2])), name="w7")
-    w8 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[3])), name="w8")
-    w9 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[3])), name="w9")
-    w10 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[4])), name="w10")
-    w11 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[4])), name="w11")
-    w12 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[4],n_convfilter[4])), name="w12")
-    w13 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[5])), name="w13")
-    w14 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[5],n_convfilter[5])), name="w14")
-    w15 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,n_fc_filters[0])), name="w15")
+    with tf.name_scope("Encoder"):
+        w0 = tf.Variable(tf.contrib.layers.xavier_initializer()((7,7,3,n_convfilter[0])), name="conv1a")
+        w1 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[0])), name="conv1b")
+        w2 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[1])), name="conv2a")
+        w3 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[1])), name="conv2b")
+        w4 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[0],n_convfilter[1])), name="conv2c")
+        w5 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[2])), name="conv3a")
+        w6 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[2])), name="conv3b")
+        w7 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[1],n_convfilter[2])), name="conv3c")
+        w8 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[3])), name="conv4a")
+        w9 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[3])), name="conv4b")
+        w10 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[4])), name="conv5a")
+        w11 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[4])), name="conv5b")
+        w12 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[4],n_convfilter[4])), name="conv5c")
+        w13 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[5])), name="conv6a")
+        w14 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[5],n_convfilter[5])), name="conv6b")
+        w15 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,n_fc_filters[0])), name="fc7")
     
     ## GRU PART ##
-    w16 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w16")
-    w17 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="w17")
-    w18 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="w18")
-    w19 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="w19")
-
+    with tf.name_scope("GRU"):
+        w16 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w_update")
+        w17 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="update_gate")
+        w18 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="reset_gate")
+        w19 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="tanh_reset")
+        w31 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w_reset")
+        
     ## DECODER PART ##
-    w20 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="w20")
-    w21 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="w21")
-    w22 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[2])), name="w22")
-    w23 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[2])), name="w23")
-    w24 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[3])), name="w24")
-    w25 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[3])), name="w25")
-    w26 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,1,n_deconvfilter[2],n_deconvfilter[3])), name="w26")
-    w27 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[4])), name="w27")
-    w28 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="w28")
-    w29 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="w29")
-    w30 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[5])), name="w30")
+    with tf.name_scope("Decoder"):
+        w20 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="conv7a")
+        w21 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="conv7b")
+        w22 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[2])), name="conv8a")
+        w23 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[2])), name="conv8b")
+        w24 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[3])), name="conv9a")
+        w25 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[3])), name="conv9b")
+        w26 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,1,n_deconvfilter[2],n_deconvfilter[3])), name="conv9c")
+        w27 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[4])), name="conv10a")
+        w28 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="conv10b")
+        w29 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="conv10c")
+        w30 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[5])), name="conv11a")
 
     w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10,
      w11, w12, w13, w14, w15, w16, w17, w18, w19, w20,
-     w21, w22, w23, w24, w25, w26, w27, w28, w29, w30]
+     w21, w22, w23, w24, w25, w26, w27, w28, w29, w30, w31]
 
     return w
 
@@ -175,18 +179,22 @@ def gru(w,x_curr, prev_s):
     #print("Iteration no:",x_curr.shape[0])
 
     ''' TODO : Broadcast-dot product or matmul ??'''
-    fc_layer = tf.matmul(x_t,w[16]) #[1,1024]x[1024,8192]
-    fc_layer = tf.reshape(fc_layer,[-1,4,128,4,4]) #[1,4,128,4,4]
+    fc_layer_U = tf.matmul(x_t,w[16]) #[1,1024]x[1024,8192] // FC LAYER FOR UPDATE GATE
+    fc_layer_U = tf.reshape(fc_layer_U,[-1,4,128,4,4]) #[1,4,128,4,4]
+
+    fc_layer_R = tf.matmul(x_t,w[31]) # FC LAYER FOR RESET GATE
+    fc_layer_R = tf.reshape(fc_layer_R,[-1,4,128,4,4]) #[1,4,128,4,4]
+    
 
     update_gate = tf.nn.conv3d(prev_s,w[17],strides=[1,1,1,1,1],padding="SAME")
 
-    update_gate = update_gate + fc_layer
+    update_gate = update_gate + fc_layer_U
     update_gate = tf.sigmoid(update_gate)
 
     complement_update_gate = tf.subtract(tf.ones_like(update_gate),update_gate)
 
     reset_gate = tf.nn.conv3d(prev_s,w[18],strides=[1,1,1,1,1],padding="SAME")
-    reset_gate = reset_gate + fc_layer
+    reset_gate = reset_gate + fc_layer_R
     reset_gate = tf.sigmoid(reset_gate)
 
     rs = tf.multiply(reset_gate,prev_s) # Element-wise multiply
@@ -198,8 +206,8 @@ def gru(w,x_curr, prev_s):
         tf.multiply(update_gate,prev_s),
         tf.multiply(complement_update_gate,tanh_reset)
     )
-    print("GRU OUT")
-    print(gru_out.shape)
+    #print("GRU OUT")
+    #print(gru_out.shape)
 
     return gru(w,x_curr[1:,:],gru_out)
 
