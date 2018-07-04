@@ -15,6 +15,9 @@ n_gru_vox = 4
 
 def main():
     
+    print("Please run net.py!")
+    return
+
     parser = argparse.ArgumentParser(description='Make everything 3D')
     parser.add_argument('--batch-size',dest='batch_size',help='Batch size',default=120,type=int)
     parser.add_argument('--iter',dest='iter',help='Number of iterations',default=1000,type=int)

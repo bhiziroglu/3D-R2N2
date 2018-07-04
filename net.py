@@ -3,6 +3,7 @@ import voxel
 import numpy as np
 from PIL import Image
 import dataset
+from tqdm import tqdm
 
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
@@ -25,69 +26,19 @@ with tf.name_scope("Dataset"):
 print("Finished reading dataset.")
 
 
+def test_predict(pred,ind):
+    pred_name = "test_pred_"+str(ind)+".obj"
+    voxel.voxel2obj(pred_name,pred)
 
-def initialize_weights():
-    
-    ## ENCODER PART ##
-    with tf.name_scope("Encoder_Weights"):
-        w0 = tf.Variable(tf.contrib.layers.xavier_initializer()((7,7,3,n_convfilter[0])), name="conv1a")
-        w1 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[0])), name="conv1b")
-        w2 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[1])), name="conv2a")
-        w3 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[1])), name="conv2b")
-        w4 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[0],n_convfilter[1])), name="conv2c")
-        w5 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[2])), name="conv3a")
-        w6 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[2])), name="conv3b")
-        w7 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[1],n_convfilter[2])), name="conv3c")
-        w8 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[3])), name="conv4a")
-        w9 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[3])), name="conv4b")
-        w10 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[4])), name="conv5a")
-        w11 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[4])), name="conv5b")
-        w12 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[4],n_convfilter[4])), name="conv5c")
-        w13 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[5])), name="conv6a")
-        w14 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[5],n_convfilter[5])), name="conv6b")
-        w15 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,n_fc_filters[0])), name="fc7")
-    
-    ## GRU PART ##
-    with tf.name_scope("GRU_Weights"):
-        w16 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w_update")
-        w17 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="update_gate")
-        w18 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="reset_gate")
-        w19 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="tanh_reset")
-        w31 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w_reset")
-        
-    ## DECODER PART ##
-    with tf.name_scope("Decoder_Weights"):
-        w20 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="conv7a")
-        w21 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="conv7b")
-        w22 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[2])), name="conv8a")
-        w23 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[2])), name="conv8b")
-        w24 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[3])), name="conv9a")
-        w25 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[3])), name="conv9b")
-        w26 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,1,n_deconvfilter[2],n_deconvfilter[3])), name="conv9c")
-        w27 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[4])), name="conv10a")
-        w28 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="conv10b")
-        w29 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="conv10c")
-        w30 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[5])), name="conv11a")
-
-    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10,
-     w11, w12, w13, w14, w15, w16, w17, w18, w19, w20,
-     w21, w22, w23, w24, w25, w26, w27, w28, w29, w30, w31]
-
-    return w
-
-
-
-
-
-def predict(w,image,ind):
+def predict(image,ind):
     im = np.array(Image.open(image))
     im = tf.convert_to_tensor(im)
     im = tf.reshape(im,[1,127,127,3])
-    enc = encoder(w,im)
+    enc = encoder(im)
     tmp_state = tf.zeros_like(
         tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5))
     g = gru(w,enc,tmp_state)
-    dec = decoder(w,g)
+    dec = decoder(g)
     pred_name = "test_pred_"+str(ind)+".obj"
     res = dec.eval()
     voxel.voxel2obj(pred_name,res[0,:, :, :,1])
@@ -127,11 +78,11 @@ def loss(x,y):
         tf.nn.softmax_cross_entropy_with_logits_v2
     '''
     #return tf.metrics.mean(l)
-    return tf.reduce_mean(l)
+    return tf.reduce_mean(l),x[0,:,:,:,1]
 
 
 
-def encoder_gru():
+def encoder_gru(image=None):
     
     w0 = tf.Variable(tf.contrib.layers.xavier_initializer()((7,7,3,n_convfilter[0])), name="conv1a")
     w1 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[0])), name="conv1b")
@@ -163,7 +114,11 @@ def encoder_gru():
     with tf.name_scope("Encoder"):
         
         # Convolutional Layer #1
-        conv1a = tf.nn.conv2d(input=X,filter=w[0],strides=[1,1,1,1],padding="SAME")
+        if image is None:
+            conv1a = tf.nn.conv2d(input=X,filter=w[0],strides=[1,1,1,1],padding="SAME")
+        else:
+            conv1a = tf.nn.conv2d(input=image,filter=w[0],strides=[1,1,1,1],padding="SAME")
+
         conv1b = tf.nn.conv2d(input=conv1a,filter=w[1],strides=[1,1,1,1],padding="SAME")
         pool1 = tf.nn.max_pool(conv1b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         # [1, 64, 64, 96]
@@ -251,71 +206,6 @@ def encoder_gru():
 
     
     
-
-
-def encoder(w,ims):
-
-    '''TODO: 
-    Add leaky relus after each convolution layer
-    '''
-    with tf.name_scope("Encoder"):
-        # Input Layer
-        ims = tf.convert_to_tensor(ims) # 24 Images are stored in a list, convert them to Tensor
-        #X = ims #Placeholder
-        input_layer = tf.cast(ims, tf.float32)
-
-        # Convolutional Layer #1
-        conv1a = tf.nn.conv2d(input=input_layer,filter=w[0],strides=[1,1,1,1],padding="SAME")
-        conv1b = tf.nn.conv2d(input=conv1a,filter=w[1],strides=[1,1,1,1],padding="SAME")
-        pool1 = tf.nn.max_pool(conv1b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        # [1, 64, 64, 96]
-
-        # Convolutional Layer #2
-        conv2a = tf.nn.conv2d(input=pool1,filter=w[2],strides=[1,1,1,1],padding="SAME")
-        conv2b = tf.nn.conv2d(input=conv2a,filter=w[3],strides=[1,1,1,1],padding="SAME")
-        conv2c = tf.nn.conv2d(input=pool1,filter=w[4],strides=[1,1,1,1],padding="SAME")
-        res2 = tf.add(conv2b,conv2c)
-        pool2 = tf.nn.max_pool(res2,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID")
-        ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
-
-        # Convolutional Layer #3
-        conv3a = tf.nn.conv2d(input=pool2,filter=w[5],strides=[1,1,1,1],padding="SAME")
-        conv3b = tf.nn.conv2d(input=conv3a,filter=w[6],strides=[1,1,1,1],padding="SAME")
-        conv3c = tf.nn.conv2d(input=pool2,filter=w[7],strides=[1,1,1,1],padding="SAME")
-        res3 = tf.add(conv3b,conv3c)
-        pool3 = tf.nn.max_pool(res3,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID")
-        ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
-
-        # Convolutional Layer #4
-        conv4a = tf.nn.conv2d(input=pool3,filter=w[8],strides=[1,1,1,1],padding="SAME")
-        conv4b = tf.nn.conv2d(input=conv4a,filter=w[9],strides=[1,1,1,1],padding="SAME")
-        pool4 = tf.nn.max_pool(conv4b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
-    
-        # Convolutional Layer #5
-        conv5a = tf.nn.conv2d(input=pool4,filter=w[10],strides=[1,1,1,1],padding="SAME")
-        conv5b = tf.nn.conv2d(input=conv5a,filter=w[11],strides=[1,1,1,1],padding="SAME")
-        conv5c = tf.nn.conv2d(input=pool4,filter=w[12],strides=[1,1,1,1],padding="SAME")
-        res5 = tf.add(conv5b,conv5c)
-        pool5 = tf.nn.max_pool(res5,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID")
-        ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
-    
-    # Convolutional Layer #6
-        conv6a = tf.nn.conv2d(input=pool5,filter=w[13],strides=[1,1,1,1],padding="SAME")
-        conv6b = tf.nn.conv2d(input=conv6a,filter=w[14],strides=[1,1,1,1],padding="SAME")
-        pool6 = tf.nn.max_pool(conv6b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
-        
-        # Flatten Layer
-        flat7 = tf.reshape(pool6,[pool6.shape[0],-1])
-        ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
-
-        # FC Layer
-        fc7 = tf.multiply(flat7,w[15])
-        ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
-        # [1,1024]
-
-    return fc7
 
 
 def gru(w,x_curr, prev_s):
@@ -461,13 +351,13 @@ loss_op = loss(logits,Y)
 # Calculate and clip gradients
 params = tf.trainable_variables()
 gradients = tf.gradients(loss_op, params)
-clipped_gradients, _ = tf.clip_by_global_norm(
-    gradients, 1) # 1 is max_gradient_norm
+#clipped_gradients, _ = tf.clip_by_global_norm(
+#    gradients, 1) # 1 is max_gradient_norm
 
 # Optimization
 optimizer = tf.train.AdamOptimizer(0.00001)
 update_step = optimizer.apply_gradients(
-    zip(clipped_gradients, params))
+    zip(gradients, params))
 
 
 if __name__=="__main__":
@@ -486,7 +376,7 @@ if __name__=="__main__":
                                             
         iter = 0
         print("Started training.")
-        for image_hash in x_train.keys():
+        for image_hash in tqdm(x_train.keys()):
             iter+=1
 
             initial_state = tf.zeros_like(
@@ -497,14 +387,8 @@ if __name__=="__main__":
                 image = tf.convert_to_tensor(image)
                 image = tf.reshape(image,[1,127,127,3])
                 image = image.eval()
-                #print("XDXDXD")
-                #print(initial_state.shape)
                 initial_state = sess.run([forward_pass], feed_dict={X: image, S: initial_state})
-                #print("NUMPY SHAPE")
-                #print(initial_state[0])
                 initial_state = np.array(initial_state[0])
-                #initial_state = tf.convert_to_tensor(hidden_state)
-                #initial_state = initial_state.eval()
             
 
 
@@ -513,9 +397,18 @@ if __name__=="__main__":
 
             loss, _ = sess.run([loss_op, update_step], feed_dict={S: initial_state, Y: vox})
             
-            print("Image: ",iter," LOSS:  ",loss)
-            #tf.summary.histogram('loss', loss)
+            print("XDXDXDDXXXD")
+            print(tf.reduce_sum(loss[1]))
 
+            print("Object: ",iter," LOSS:  ",loss[0])
+            #tf.summary.histogram('loss', loss)
+            if iter % 2 == 0:
+                print("Testing Model at Iter ",iter)
+                print("HASH ",image_hash)
+                # Save the prediction to an OBJ file (mesh file).
+                #predict(w,"test_image.png",iter)
+                test_predict(loss[1],iter)
+                test_predict(vox,iter+10)
         
 
 
