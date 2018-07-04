@@ -1,6 +1,7 @@
 import tensorflow as tf
 import voxel
 import numpy as np
+from PIL import Image
 
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
@@ -60,16 +61,18 @@ def initialize_weights():
 
 
 
-def predict(w,image):
-    #pred = tf.random_uniform([1, 32, 2, 32, 32])
-    
-    # Paper - Implementation
-    #pred = np.random.rand(1,32,2,32,32)    
-    #voxel.voxel2obj('test_prediction.obj', pred[0, :, 1, :, :] > [0.4]) #0.4 Treshold
-    
-    pred = np.random.rand(32,32,32)
-    voxel.voxel2obj('test_pred.obj',pred[:, :, :] > [0.4])
-    return pred
+def predict(w,image,ind):
+    im = np.array(Image.open(image))
+    im = tf.convert_to_tensor(im)
+    im = tf.reshape(im,[1,127,127,3])
+    enc = encoder(w,im)
+    tmp_state = tf.zeros_like(
+        tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5))
+    g = gru(w,enc,tmp_state)
+    dec = decoder(w,g)
+    pred_name = "test_pred_"+str(ind)+".obj"
+    res = dec.eval()
+    voxel.voxel2obj(pred_name,res[0,:, :, :,1])
 
 
 

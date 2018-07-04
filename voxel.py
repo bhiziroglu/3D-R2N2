@@ -18,7 +18,7 @@ def voxel2mesh(voxels, surface_view):
     faces = []
     curr_vert = 0
 
-    positions = np.where(voxels > 0.9)
+    positions = np.where(voxels > 0.1)
     #positions = np.where(voxels > 0.4) #Real
     voxels[positions] = 1 
     for i, j, k in zip(*positions):

@@ -7,6 +7,7 @@ import os
 import tensorflow as tf
 import net
 import dataset
+import voxel
 
 #tf.logging.set_verbosity(tf.logging.INFO)
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
@@ -25,6 +26,8 @@ def main():
     w = net.initialize_weights()
     x_train = dataset.train_data()
     y_train = dataset.train_labels()
+    print("Finished reading dataset.")
+
 
     # TF Graph Input
     X = tf.placeholder(tf.float32, shape=[24, 127, 127, 3],name = "Image")
@@ -70,23 +73,29 @@ def main():
                                             sess.graph)
                                             
         iter = 0
-
+        print("Started training.")
         for image_hash in x_train.keys():
             iter+=1
             ims = []
             for image in x_train[image_hash]:
                 ims.append(image)
             
-            ims = tf.Session().run(tf.convert_to_tensor(ims)) # Convert List->Tensor->Numpy Array
-            vox = tf.Session().run(tf.convert_to_tensor(y_train[image_hash])) # Convert List->Tensor->Numpy Array
+            ims = tf.Session().run(
+                tf.convert_to_tensor(ims)) # Convert List->Tensor->Numpy Array
+            vox = tf.Session().run(
+                tf.convert_to_tensor(y_train[image_hash])) # Convert List->Tensor->Numpy Array
 
             loss, _ = sess.run([loss_op, update_step], feed_dict={X: ims, Y: vox})
-            print("LOSS:  ",loss)
+            print("Image: ",iter," LOSS:  ",loss)
+            tf.summary.histogram('loss', loss)
 
-            if iter % 10 == 0:
-                print("LOSS:  ",loss)
+            if iter % 3 == 0:
+                print("Testing Model at Iter ",iter)
+                # Save the prediction to an OBJ file (mesh file).
+                net.predict(w,"test_image.png",iter)
 
-        print("Optimization Finished!")
+
+        print("Finished!")
 
 
 

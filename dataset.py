@@ -14,6 +14,8 @@ def train_labels():
            # Values = binvox
 
     for label in label_dir:
+        if(label.startswith('.')):
+            continue
         binv = open('./03211117_labelsR/'+label+'/model.binvox','rb')
         binvox_data = binvox_rw.read_as_3d_array(binv).data # binvox_data is 32x32x32
         y_train[label] = np.asarray(binvox_data)
@@ -30,6 +32,8 @@ def train_data():
     data = os.listdir('./03211117R')
     for item in data:
         tmp_im_array = []
+        if(item.startswith('.')):
+            continue
         for pic in os.listdir('./03211117R/'+item+'/rendering'):
             if('.png' in pic): #If current item is a picture, store it
                 im = np.array(Image.open('./03211117R/'+item+'/rendering/'+pic))
