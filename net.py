@@ -135,42 +135,56 @@ def encoder_gru(image=None):
             conv1a = tf.nn.conv2d(input=image,filter=w[0],strides=[1,1,1,1],padding="SAME")
 
         conv1b = tf.nn.conv2d(input=conv1a,filter=w[1],strides=[1,1,1,1],padding="SAME")
+        conv1b = tf.nn.leaky_relu(conv1b)
         pool1 = tf.nn.max_pool(conv1b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         # [1, 64, 64, 96]
 
         # Convolutional Layer #2
         conv2a = tf.nn.conv2d(input=pool1,filter=w[2],strides=[1,1,1,1],padding="SAME")
+        conv2a = tf.nn.leaky_relu(conv2a)
         conv2b = tf.nn.conv2d(input=conv2a,filter=w[3],strides=[1,1,1,1],padding="SAME")
+        conv2b = tf.nn.leaky_relu(conv2b)
         conv2c = tf.nn.conv2d(input=pool1,filter=w[4],strides=[1,1,1,1],padding="SAME")
+        conv2c = tf.nn.leaky_relu(conv2c)
         res2 = tf.add(conv2b,conv2c)
         pool2 = tf.nn.max_pool(res2,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID")
         ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
 
         # Convolutional Layer #3
         conv3a = tf.nn.conv2d(input=pool2,filter=w[5],strides=[1,1,1,1],padding="SAME")
+        conv3a = tf.nn.leaky_relu(conv3a)
         conv3b = tf.nn.conv2d(input=conv3a,filter=w[6],strides=[1,1,1,1],padding="SAME")
+        conv3b = tf.nn.leaky_relu(conv3b)
         conv3c = tf.nn.conv2d(input=pool2,filter=w[7],strides=[1,1,1,1],padding="SAME")
+        conv3c = tf.nn.leaky_relu(conv3c)
         res3 = tf.add(conv3b,conv3c)
         pool3 = tf.nn.max_pool(res3,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID")
         ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
 
         # Convolutional Layer #4
         conv4a = tf.nn.conv2d(input=pool3,filter=w[8],strides=[1,1,1,1],padding="SAME")
+        conv4a = tf.nn.leaky_relu(conv4a)
         conv4b = tf.nn.conv2d(input=conv4a,filter=w[9],strides=[1,1,1,1],padding="SAME")
+        conv4b = tf.nn.leaky_relu(conv4b)
         pool4 = tf.nn.max_pool(conv4b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
     
         # Convolutional Layer #5
         conv5a = tf.nn.conv2d(input=pool4,filter=w[10],strides=[1,1,1,1],padding="SAME")
+        conv5a = tf.nn.leaky_relu(conv5a)
         conv5b = tf.nn.conv2d(input=conv5a,filter=w[11],strides=[1,1,1,1],padding="SAME")
+        conv5b = tf.nn.leaky_relu(conv5b)
         conv5c = tf.nn.conv2d(input=pool4,filter=w[12],strides=[1,1,1,1],padding="SAME")
+        conv5c = tf.nn.leaky_relu(conv5c)
         res5 = tf.add(conv5b,conv5c)
         pool5 = tf.nn.max_pool(res5,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID")
         ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
     
-    # Convolutional Layer #6
+        # Convolutional Layer #6
         conv6a = tf.nn.conv2d(input=pool5,filter=w[13],strides=[1,1,1,1],padding="SAME")
+        conv6a = tf.nn.leaky_relu(conv6a)
         conv6b = tf.nn.conv2d(input=conv6a,filter=w[14],strides=[1,1,1,1],padding="SAME")
+        conv6b = tf.nn.leaky_relu(conv6b)
         pool6 = tf.nn.max_pool(conv6b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
         
