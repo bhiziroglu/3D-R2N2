@@ -107,7 +107,7 @@ def loss(x,y):
     x = x[0,:,:,:,1]
     with tf.name_scope("loss"):
         l = tf.nn.softmax_cross_entropy_with_logits_v2(logits=x,labels=y)
-    return tf.reduce_sum(l),x
+    return tf.reduce_sum(l)
 
 
 
@@ -345,6 +345,7 @@ decoder_pass = decoder()
 
 # Define loss and optimizer
 loss_op = loss(decoder_pass,Y)
+sample = decoder_pass
 
 # Calculate and clip gradients
 params = tf.trainable_variables()
@@ -353,9 +354,9 @@ clipped_gradients, _ = tf.clip_by_global_norm(
     gradients, tf.constant(5,name="max_gradient_norm",dtype=tf.float32)) # 1 is max_gradient_norm
 
 # Optimization
-optimizer = tf.train.AdamOptimizer(0.00001)
-update_step = optimizer.apply_gradients(
-    zip(clipped_gradients, params))
+optimizer = tf.train.AdamOptimizer(0.00001).minimize(loss_op)
+#update_step = optimizer.apply_gradients(
+#    zip(clipped_gradients, params))
 
 
 if __name__=="__main__":
@@ -391,16 +392,16 @@ if __name__=="__main__":
             vox = tf.convert_to_tensor(y_train[image_hash])
             vox = vox.eval()
 
-            _, loss = sess.run([update_step, loss_op], feed_dict={S: initial_state, Y: vox})
-            print(loss[0])
-            print("Object: ",iter," LOSS:  ",loss[0])
-            tf.summary.histogram('loss', loss[0])
+            sess.run([optimizer], feed_dict={S: initial_state, Y: vox})
+            pred, loss = sess.run([sample, loss_op], feed_dict={S: initial_state, Y: vox})
+            print("Object: ",iter," LOSS:  ",loss)
+            tf.summary.histogram('loss', loss)
             if iter % 2 == 0:
                 print("Testing Model at Iter ",iter)
                 print("HASH "+image_hash)
                 # Save the prediction to an OBJ file (mesh file).
                 #predict(w,"test_image.png",iter)
-                test_predict(loss[1],iter)
+                test_predict(pred[0,:,:,:,1],iter)
                 test_predict(vox,iter+10)
         
 
