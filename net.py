@@ -104,36 +104,21 @@ def train(w,x_train,y_train):
 
 
 def loss(x,y):
-    #y = tf.convert_to_tensor(y)
-    #y = tf.cast(y,tf.float32)
     x = x[0,:,:,:,1]
     with tf.name_scope("loss"):
-        l = tf.nn.softmax_cross_entropy_with_logits(logits=x,labels=y)
-    '''TODO: Figure out:
-        tf.nn.softmax_cross_entropy_with_logits 
-            OR
-        tf.nn.softmax_cross_entropy_with_logits_v2
-    '''
-    #return tf.metrics.mean(l)
-    #return tf.reduce_mean(x*tf.log(y)+(1-y)*(tf.log(1-x))),x
-    #print("XD")
-    #x = tf.Print(x,[x])
-    #print("XD")
+        l = tf.nn.softmax_cross_entropy_with_logits_v2(logits=x,labels=y)
     return tf.reduce_sum(l),x
 
 
 
 
-def encoder_gru(image=None):
+def encoder_gru():
     
     with tf.name_scope("Encoder"):
         
         # Convolutional Layer #1
-        if image is None:
-            conv1a = tf.nn.conv2d(input=X,filter=w[0],strides=[1,1,1,1],padding="SAME")
-        else:
-            conv1a = tf.nn.conv2d(input=image,filter=w[0],strides=[1,1,1,1],padding="SAME")
-
+        conv1a = tf.nn.conv2d(input=X,filter=w[0],strides=[1,1,1,1],padding="SAME")
+        conv1a = tf.nn.leaky_relu(conv1a)
         conv1b = tf.nn.conv2d(input=conv1a,filter=w[1],strides=[1,1,1,1],padding="SAME")
         conv1b = tf.nn.leaky_relu(conv1b)
         pool1 = tf.nn.max_pool(conv1b,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
@@ -229,8 +214,6 @@ def encoder_gru(image=None):
             tf.multiply(update_gate,S),
             tf.multiply(complement_update_gate,tanh_reset)
         )
-
-        gru_out = tf.contrib.layers.layer_norm(gru_out)
 
     return gru_out # Return hidden state
 
@@ -333,6 +316,8 @@ def decoder():
         conv11a = tf.nn.conv3d(res10,w_decoder[10],strides=[1,1,1,1,1],padding="SAME")
         conv11a = tf.nn.leaky_relu(conv11a)  
 
+        conv11a = tf.contrib.layers.layer_norm(conv11a) #Norm layer
+
     return conv11a
 
 
@@ -392,8 +377,7 @@ if __name__=="__main__":
         for image_hash in tqdm(x_train.keys()):
             iter+=1
 
-            initial_state = tf.ones_like(
-              tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5))
+            initial_state = tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)
             initial_state = initial_state.eval()
 
             for image in x_train[image_hash]:
@@ -403,10 +387,7 @@ if __name__=="__main__":
                 initial_state = sess.run([forward_pass], feed_dict={X: image, S: initial_state})
                 initial_state = np.array(initial_state[0])
             
-            print("XDLXKDLKDXLKXD")
-            print(initial_state)
-            print("XDXLKXDLKLK")
-            print(tf.reduce_sum(initial_state))
+
             vox = tf.convert_to_tensor(y_train[image_hash])
             vox = vox.eval()
 
