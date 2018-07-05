@@ -13,9 +13,10 @@ n_fc_filters = [1024]
 
 
 def initialize_placeholders():
-    X = tf.placeholder(tf.float32, shape=[1, 127, 127, 3],name = "X")
-    Y = tf.placeholder(tf.float32, shape=[32, 32, 32],name = "Y")
-    S = tf.placeholder(tf.float32, shape=[1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox],name = "S")
+    with tf.name_scope("Placeholders"):
+        X = tf.placeholder(tf.float32, shape=[1, 127, 127, 3],name = "X")
+        Y = tf.placeholder(tf.float32, shape=[32, 32, 32],name = "Y")
+        S = tf.placeholder(tf.float32, shape=[1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox],name = "S")
     return X,Y,S
 
 X,Y,S = initialize_placeholders()
@@ -25,25 +26,59 @@ with tf.name_scope("Dataset"):
     y_train = dataset.train_labels()
 print("Finished reading dataset.")
 
+encoder_gru_kernel_shapes = [
+    #Encoder
+    [7,7,3,n_convfilter[0]], #conv1a
+    [3,3,n_convfilter[0],n_convfilter[0]], #conv1b
+    [3,3,n_convfilter[0],n_convfilter[1]], #conv2a
+    [3,3,n_convfilter[1],n_convfilter[1]], #conv2b
+    [1,1,n_convfilter[0],n_convfilter[1]], #conv2c
+    [3,3,n_convfilter[1],n_convfilter[2]], #conv3a
+    [3,3,n_convfilter[2],n_convfilter[2]], #conv3b
+    [1,1,n_convfilter[1],n_convfilter[2]], #conv3c
+    [3,3,n_convfilter[2],n_convfilter[3]], #conv4a
+    [3,3,n_convfilter[3],n_convfilter[3]], #conv4b
+    [3,3,n_convfilter[3],n_convfilter[4]], #conv5a
+    [3,3,n_convfilter[4],n_convfilter[4]], #conv5b
+    [1,1,n_convfilter[4],n_convfilter[4]], #conv5c
+    [3,3,n_convfilter[4],n_convfilter[5]], #conv6a
+    [3,3,n_convfilter[5],n_convfilter[5]], #conv6b
+    [1,n_fc_filters[0]], #fc7
+    #GRU
+    [1024,8192], #w_update
+    [3,3,3,n_gru_vox,n_gru_vox], #update_gate
+    [3,3,3,n_gru_vox,n_gru_vox], #reset_gate
+    [3,3,3,n_gru_vox,n_gru_vox], #tanh_reset
+    [1024,8192] #w_reset
+]
+
+decoder_kernel_shapes = [
+    [3,3,3,n_deconvfilter[1],n_deconvfilter[1]], #conv7a
+    [3,3,3,n_deconvfilter[1],n_deconvfilter[1]], #conv7b
+    [3,3,3,n_deconvfilter[1],n_deconvfilter[2]], #conv8a
+    [3,3,3,n_deconvfilter[2],n_deconvfilter[2]], #conv8b
+    [3,3,3,n_deconvfilter[2],n_deconvfilter[3]], #conv9a
+    [3,3,3,n_deconvfilter[3],n_deconvfilter[3]], #conv9b
+    [1,1,1,n_deconvfilter[2],n_deconvfilter[3]], #conv9c
+    [3,3,3,n_deconvfilter[3],n_deconvfilter[4]], #conv10a
+    [3,3,3,n_deconvfilter[4],n_deconvfilter[4]], #conv10b
+    [3,3,3,n_deconvfilter[4],n_deconvfilter[4]], #conv10c
+    [3,3,3,n_deconvfilter[4],n_deconvfilter[5]] #conv11a
+]
+
+with tf.name_scope("encoder_gru_weights"):
+    w = [tf.get_variable(
+        "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4664), trainable=True) 
+        for _,kernel in enumerate(encoder_gru_kernel_shapes)]
+
+with tf.name_scope("decoder_weights"):
+    w_decoder = [tf.get_variable(
+        "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4664), trainable=True) 
+        for _,kernel in enumerate(decoder_kernel_shapes)]
 
 def test_predict(pred,ind):
     pred_name = "test_pred_"+str(ind)+".obj"
     voxel.voxel2obj(pred_name,pred)
-
-def predict(image,ind):
-    im = np.array(Image.open(image))
-    im = tf.convert_to_tensor(im)
-    im = tf.reshape(im,[1,127,127,3])
-    enc = encoder(im)
-    tmp_state = tf.zeros_like(
-        tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5))
-    g = gru(w,enc,tmp_state)
-    dec = decoder(g)
-    pred_name = "test_pred_"+str(ind)+".obj"
-    res = dec.eval()
-    voxel.voxel2obj(pred_name,res[0,:, :, :,1])
-
-
 
 
 def train(w,x_train,y_train):
@@ -69,48 +104,28 @@ def train(w,x_train,y_train):
 
 
 def loss(x,y):
-    y = tf.convert_to_tensor(y)
-    y = tf.cast(y,tf.float32)
-    l = tf.nn.softmax_cross_entropy_with_logits(logits=x[0,:,:,:,1],labels=y)
+    #y = tf.convert_to_tensor(y)
+    #y = tf.cast(y,tf.float32)
+    x = x[0,:,:,:,1]
+    with tf.name_scope("loss"):
+        l = tf.nn.softmax_cross_entropy_with_logits(logits=x,labels=y)
     '''TODO: Figure out:
         tf.nn.softmax_cross_entropy_with_logits 
             OR
         tf.nn.softmax_cross_entropy_with_logits_v2
     '''
     #return tf.metrics.mean(l)
-    return tf.reduce_mean(l),x[0,:,:,:,1]
+    #return tf.reduce_mean(x*tf.log(y)+(1-y)*(tf.log(1-x))),x
+    #print("XD")
+    #x = tf.Print(x,[x])
+    #print("XD")
+    return tf.reduce_sum(l),x
+
 
 
 
 def encoder_gru(image=None):
     
-    w0 = tf.Variable(tf.contrib.layers.xavier_initializer()((7,7,3,n_convfilter[0])), name="conv1a")
-    w1 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[0])), name="conv1b")
-    w2 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[0],n_convfilter[1])), name="conv2a")
-    w3 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[1])), name="conv2b")
-    w4 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[0],n_convfilter[1])), name="conv2c")
-    w5 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[1],n_convfilter[2])), name="conv3a")
-    w6 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[2])), name="conv3b")
-    w7 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[1],n_convfilter[2])), name="conv3c")
-    w8 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[2],n_convfilter[3])), name="conv4a")
-    w9 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[3])), name="conv4b")
-    w10 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[3],n_convfilter[4])), name="conv5a")
-    w11 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[4])), name="conv5b")
-    w12 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,n_convfilter[4],n_convfilter[4])), name="conv5c")
-    w13 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[4],n_convfilter[5])), name="conv6a")
-    w14 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,n_convfilter[5],n_convfilter[5])), name="conv6b")
-    w15 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,n_fc_filters[0])), name="fc7")
-    
-
-    w16 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w_update")
-    w17 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="update_gate")
-    w18 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="reset_gate")
-    w19 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_gru_vox,n_gru_vox)), name="tanh_reset")
-    w31 = tf.Variable(tf.contrib.layers.xavier_initializer()((1024,8192)), name="w_reset")
-
-    w = [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10,
-     w11, w12, w13, w14, w15, w16, w17, w18, w19]
-
     with tf.name_scope("Encoder"):
         
         # Convolutional Layer #1
@@ -176,7 +191,7 @@ def encoder_gru(image=None):
         fc_layer_U = tf.matmul(fc7,w[16]) #[1,1024]x[1024,8192] // FC LAYER FOR UPDATE GATE
         fc_layer_U = tf.reshape(fc_layer_U,[-1,4,128,4,4]) #[1,4,128,4,4]
 
-        fc_layer_R = tf.matmul(fc7,w31) # FC LAYER FOR RESET GATE
+        fc_layer_R = tf.matmul(fc7,w[20]) # FC LAYER FOR RESET GATE
         fc_layer_R = tf.reshape(fc_layer_R,[-1,4,128,4,4]) #[1,4,128,4,4]
         
 
@@ -200,8 +215,9 @@ def encoder_gru(image=None):
             tf.multiply(update_gate,S),
             tf.multiply(complement_update_gate,tanh_reset)
         )
-    print("XXDDDKSLDKSDLKSLDKSLKD")
-    print(gru_out.shape)
+
+        gru_out = tf.contrib.layers.layer_norm(gru_out)
+
     return gru_out # Return hidden state
 
     
@@ -250,67 +266,57 @@ def gru(w,x_curr, prev_s):
 
     return gru(w,x_curr[1:,:],gru_out)
 
+
+
+
     
 def decoder():
-    
-    w20 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="conv7a")
-    w21 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[1])), name="conv7b")
-    w22 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[1],n_deconvfilter[2])), name="conv8a")
-    w23 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[2])), name="conv8b")
-    w24 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[2],n_deconvfilter[3])), name="conv9a")
-    w25 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[3])), name="conv9b")
-    w26 = tf.Variable(tf.contrib.layers.xavier_initializer()((1,1,1,n_deconvfilter[2],n_deconvfilter[3])), name="conv9c")
-    w27 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[3],n_deconvfilter[4])), name="conv10a")
-    w28 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="conv10b")
-    w29 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[4])), name="conv10c")
-    w30 = tf.Variable(tf.contrib.layers.xavier_initializer()((3,3,3,n_deconvfilter[4],n_deconvfilter[5])), name="conv11a")
-
     
     with tf.name_scope("Decoder"):
 
         s = tf.transpose(S,perm=[0,1,4,3,2]) # [(1, 4, 128, 4, 4)] -> [(1, 4, 4, 4, 128)]
         unpool7 = unpool(s)
 
-        conv7a = tf.nn.conv3d(unpool7,w20,strides=[1,1,1,1,1],padding="SAME")
+        conv7a = tf.nn.conv3d(unpool7,w_decoder[0],strides=[1,1,1,1,1],padding="SAME")
         conv7a = tf.nn.leaky_relu(conv7a)
 
-        conv7b = tf.nn.conv3d(conv7a,w21,strides=[1,1,1,1,1],padding="SAME")
+        conv7b = tf.nn.conv3d(conv7a,w_decoder[1],strides=[1,1,1,1,1],padding="SAME")
         conv7b = tf.nn.leaky_relu(conv7b)
         res7 = tf.add(unpool7,conv7b)
 
         unpool8 = unpool(res7)
 
-        conv8a = tf.nn.conv3d(unpool8,w22,strides=[1,1,1,1,1],padding="SAME")
+        conv8a = tf.nn.conv3d(unpool8,w_decoder[2],strides=[1,1,1,1,1],padding="SAME")
         conv8a = tf.nn.leaky_relu(conv8a)   
 
-        conv8b = tf.nn.conv3d(conv8a,w23,strides=[1,1,1,1,1],padding="SAME")
+        conv8b = tf.nn.conv3d(conv8a,w_decoder[3],strides=[1,1,1,1,1],padding="SAME")
         conv8b = tf.nn.leaky_relu(conv8b)    
         res8 = tf.add(unpool8,conv8b)
 
         unpool9 = unpool(res8)
 
-        conv9a = tf.nn.conv3d(unpool9,w24,strides=[1,1,1,1,1],padding="SAME")
+        conv9a = tf.nn.conv3d(unpool9,w_decoder[4],strides=[1,1,1,1,1],padding="SAME")
         conv9a = tf.nn.leaky_relu(conv9a)   
 
-        conv9b = tf.nn.conv3d(conv9a,w25,strides=[1,1,1,1,1],padding="SAME")
+        conv9b = tf.nn.conv3d(conv9a,w_decoder[5],strides=[1,1,1,1,1],padding="SAME")
         conv9b = tf.nn.leaky_relu(conv9b)  
 
-        conv9c = tf.nn.conv3d(unpool9,w26,strides=[1,1,1,1,1],padding="SAME")
+        conv9c = tf.nn.conv3d(unpool9,w_decoder[6],strides=[1,1,1,1,1],padding="SAME")
 
         res9 = tf.add(conv9c,conv9b)
 
-        conv10a = tf.nn.conv3d(res9,w27,strides=[1,1,1,1,1],padding="SAME")
+        conv10a = tf.nn.conv3d(res9,w_decoder[7],strides=[1,1,1,1,1],padding="SAME")
         conv10a = tf.nn.leaky_relu(conv10a)  
         
-        conv10b = tf.nn.conv3d(conv10a,w28,strides=[1,1,1,1,1],padding="SAME")
+        conv10b = tf.nn.conv3d(conv10a,w_decoder[8],strides=[1,1,1,1,1],padding="SAME")
         conv10b = tf.nn.leaky_relu(conv10b)  
 
-        conv10c = tf.nn.conv3d(conv10a,w29,strides=[1,1,1,1,1],padding="SAME")
+        conv10c = tf.nn.conv3d(conv10a,w_decoder[9],strides=[1,1,1,1,1],padding="SAME")
         conv10c = tf.nn.leaky_relu(conv10c)  
 
         res10 = tf.add(conv10c,conv10b)
 
-        conv11a = tf.nn.conv3d(res10,w30,strides=[1,1,1,1,1],padding="SAME")
+        conv11a = tf.nn.conv3d(res10,w_decoder[10],strides=[1,1,1,1,1],padding="SAME")
         conv11a = tf.nn.leaky_relu(conv11a)  
 
     return conv11a
@@ -332,32 +338,25 @@ def unpool(value):
     return out
 
 
-
-
-
-
-
 forward_pass = encoder_gru()
 
 decoder_pass = decoder()
 
-logits = decoder_pass
-
-prediction = tf.nn.softmax(logits)
+#logits = decoder_pass
 
 # Define loss and optimizer
-loss_op = loss(logits,Y)
+loss_op = loss(decoder_pass,Y)
 
 # Calculate and clip gradients
 params = tf.trainable_variables()
 gradients = tf.gradients(loss_op, params)
-#clipped_gradients, _ = tf.clip_by_global_norm(
-#    gradients, 1) # 1 is max_gradient_norm
+clipped_gradients, _ = tf.clip_by_global_norm(
+    gradients, tf.constant(5,name="max_gradient_norm",dtype=tf.float32)) # 1 is max_gradient_norm
 
 # Optimization
 optimizer = tf.train.AdamOptimizer(0.00001)
 update_step = optimizer.apply_gradients(
-    zip(gradients, params))
+    zip(clipped_gradients, params))
 
 
 if __name__=="__main__":
@@ -379,7 +378,7 @@ if __name__=="__main__":
         for image_hash in tqdm(x_train.keys()):
             iter+=1
 
-            initial_state = tf.zeros_like(
+            initial_state = tf.ones_like(
               tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5))
             initial_state = initial_state.eval()
 
@@ -390,21 +389,20 @@ if __name__=="__main__":
                 initial_state = sess.run([forward_pass], feed_dict={X: image, S: initial_state})
                 initial_state = np.array(initial_state[0])
             
-
-
+            print("XDLXKDLKDXLKXD")
+            print(initial_state)
+            print("XDXLKXDLKLK")
+            print(tf.reduce_sum(initial_state))
             vox = tf.convert_to_tensor(y_train[image_hash])
             vox = vox.eval()
 
-            loss, _ = sess.run([loss_op, update_step], feed_dict={S: initial_state, Y: vox})
-            
-            print("XDXDXDDXXXD")
-            print(tf.reduce_sum(loss[1]))
-
+            _, loss = sess.run([update_step, loss_op], feed_dict={S: initial_state, Y: vox})
+            print(loss[0])
             print("Object: ",iter," LOSS:  ",loss[0])
-            #tf.summary.histogram('loss', loss)
+            tf.summary.histogram('loss', loss[0])
             if iter % 2 == 0:
                 print("Testing Model at Iter ",iter)
-                print("HASH ",image_hash)
+                print("HASH "+image_hash)
                 # Save the prediction to an OBJ file (mesh file).
                 #predict(w,"test_image.png",iter)
                 test_predict(loss[1],iter)
