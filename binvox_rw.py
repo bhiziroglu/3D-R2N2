@@ -148,6 +148,8 @@ def read_as_3d_array(fp, fix_coords=True):
         axis_order = 'xyz'
     else:
         axis_order = 'xzy'
+    #print( "XDXDXDXDXDXDXDXDXDXDXDXD")
+    #print(data)
     return Voxels(data, dims, translate, scale, axis_order)
 
 def read_as_coord_array(fp, fix_coords=True):
