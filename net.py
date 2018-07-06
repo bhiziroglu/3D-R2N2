@@ -11,7 +11,6 @@ n_gru_vox = 4
 n_fc_filters = [1024]
 
 
-
 def initialize_placeholders():
     with tf.name_scope("Placeholders"):
         X = tf.placeholder(tf.float32, shape=[24, 127, 127, 3],name = "X")
@@ -21,10 +20,10 @@ def initialize_placeholders():
 
 X,Y = initialize_placeholders()
 
-with tf.name_scope("Dataset"):
-    x_train = dataset.train_data()
-    y_train = dataset.train_labels()
-print("Finished reading dataset.")
+#with tf.name_scope("Dataset"):
+#    x_train = dataset.train_data()
+#    y_train = dataset.train_labels()
+#print("Finished reading dataset.")
 
 encoder_gru_kernel_shapes = [
     #Encoder
@@ -355,46 +354,65 @@ if __name__=="__main__":
                                             
         iter = 0
         print("Started training.")
-        for image_hash in tqdm(x_train.keys()):
-            iter+=1
 
-            initial_state = tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)
-            initial_state = initial_state.eval()
+        x_train = dataset.train_data()
+        y_train = dataset.train_labels()
+        print("DXDXDXD")
+        print(len(x_train))
 
-            ims = []
 
-            for image in x_train[image_hash]:
-                #initial_state = sess.run([forward_pass], feed_dict={X: image, S: initial_state})
-                #initial_state = np.array(initial_state[0])
-                ims.append(image)
+        pbar = tqdm(total=dataset.TOTAL_SIZE)
+
+        while(x_train!=[] and y_train!=[]):
+
+            for image_hash in x_train.keys():
+                iter+=1
+
+                initial_state = tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)
+                initial_state = initial_state.eval()
+
+                ims = []
+
+                for image in x_train[image_hash]:
+                    #initial_state = sess.run([forward_pass], feed_dict={X: image, S: initial_state})
+                    #initial_state = np.array(initial_state[0])
+                    ims.append(image)
+                
+                ims = tf.convert_to_tensor(ims)
+                ims = tf.reshape(ims,[-1,127,127,3])
+                ims = ims.eval()
+
+                vox = tf.convert_to_tensor(y_train[image_hash])
+                vox = tf.cast(vox,tf.float32)
+                vox = vox.eval()
+                batch_voxel = np.zeros((1,32,32,32,2), dtype=float)  
+                batch_voxel[0,:,:,:,0]= vox < 1
+                batch_voxel[0,:,:,:,1]= vox
+
+                l,u,o = sess.run([loss_, optimizer, obj], feed_dict={X: ims, Y: batch_voxel})
+
+                print("OBJECT: " + str(iter)+" LOSS: "+str(l))
+                with open("log.txt", "a") as myfile:
+                    myfile.write("Iteration: "+str(iter)+" Loss: "+str(l))
+                #tf.summary.histogram('loss', forw[0])
+                if iter % 3 == 0:
+                    print("Testing Model at Iter ",iter)
+                    print("HASH "+image_hash)
+                    # Save the prediction to an OBJ file (mesh file).
+                    #predict(w,"test_image.png",iter)
+                    test_predict(o[0,:,:,:,1],iter)
+                    #test_predict(vox,iter+10)
+                
+                pbar.update(1)
             
-            ims = tf.convert_to_tensor(ims)
-            ims = tf.reshape(ims,[-1,127,127,3])
-            ims = ims.eval()
-
-            vox = tf.convert_to_tensor(y_train[image_hash])
-            vox = tf.cast(vox,tf.float32)
-            vox = vox.eval()
-            batch_voxel = np.zeros((1,32,32,32,2), dtype=float)  
-            batch_voxel[0,:,:,:,0]= vox < 1
-            batch_voxel[0,:,:,:,1]= vox
-
-            l,u,o = sess.run([loss_, optimizer, obj], feed_dict={X: ims, Y: batch_voxel})
-
-            print("OBJECT: " + str(iter)+" LOSS: "+str(l))
-            with open("log.txt", "a") as myfile:
-                myfile.write("Iteration: "+str(iter)+" Loss: "+str(l))
-            #tf.summary.histogram('loss', forw[0])
-            if iter % 3 == 0:
-                print("Testing Model at Iter ",iter)
-                print("HASH "+image_hash)
-                # Save the prediction to an OBJ file (mesh file).
-                #predict(w,"test_image.png",iter)
-                test_predict(o[0,:,:,:,1],iter)
-                #test_predict(vox,iter+10)
-        
+            
 
 
+                    
+            x_train = dataset.train_data()
+            y_train = dataset.train_labels()
+
+        pbar.close()
         print("Finished!")
 
 

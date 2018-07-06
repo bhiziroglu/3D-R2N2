@@ -6,31 +6,47 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
-def train_labels():
-    y_train = {} 
-    label_dir = os.listdir('./03211117_labelsR')
 
+BATCH_SIZE = 2
+label_dir = os.listdir('./03211117_labelsR')
+data = os.listdir('./03211117R')
+TOTAL_SIZE = len(data)
+
+def init_dataset():
+    label_dir = os.listdir('./03211117_labelsR')
+    data = os.listdir('./03211117R')
+    TOTAL_SIZE = len(data)
+
+def train_labels():
+    
+    if(len(label_dir)<BATCH_SIZE):
+        return []
+
+    y_train = {} 
     #d = {} # Keys = IDs for items
            # Values = binvox
-
-    for label in label_dir:
+    for _ in range(BATCH_SIZE):
+        label = label_dir.pop()
         if(label.startswith('.')):
             continue
         binv = open('./03211117_labelsR/'+label+'/model.binvox','rb')
         binvox_data = binvox_rw.read_as_3d_array(binv).data # binvox_data is 32x32x32
         y_train[label] = np.asarray(binvox_data)
-        #tmp = tf.convert_to_tensor(binvox_data)
-        #tmp = tf.cast(tmp,tf.float32)
-        #y_train[label] = tmp
 
     return y_train
         
 
 
 def train_data():
+    
+    if(len(data)<BATCH_SIZE):
+        return []
+
+
     x_train = {} #Keys = IDs for items, Values = 24 pictures
-    data = os.listdir('./03211117R')
-    for item in data:
+
+    for _ in range(BATCH_SIZE):
+        item = data.pop()
         tmp_im_array = []
         if(item.startswith('.')):
             continue
