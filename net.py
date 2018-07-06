@@ -321,14 +321,14 @@ loss_,obj = build_graph()
 
 
 # Optimization
-optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss_)
-#grads_vars = optimizer.compute_gradients(loss_)
-#clipped_gradients = []
-#for grad,var in grads_vars:
-#    clipped_gradients.append(
-#        (tf.clip_by_value(grad,5.0,-5.0),var)) # 1 is max_gradient_norm)
+optimizer = tf.train.AdamOptimizer(1e-4)
+grads_vars = optimizer.compute_gradients(loss_)
+clipped_gradients = []
+for grad,var in grads_vars:
+    clipped_gradients.append(
+        (tf.clip_by_value(grad,5.0,-5.0),var)) # 1 is max_gradient_norm)
 
-#updates = optimizer.apply_gradients(clipped_gradients)
+updates = optimizer.apply_gradients(clipped_gradients)
 # Calculate and clip gradients
 #params = tf.trainable_variables()
 #gradients = tf.gradients(loss_)
@@ -356,13 +356,13 @@ if __name__=="__main__":
         print("Started training.")
 
         with open("log.txt", "w") as myfile:
-            myfile.write("3D-R2N2 Started training.")
+            myfile.write("3D-R2N2 Started training.\n")
 
         x_train = dataset.train_data()
         y_train = dataset.train_labels()
 
-        pbar = tqdm(total=dataset.TOTAL_SIZE)
-
+        #pbar = tqdm(total=dataset.TOTAL_SIZE)
+        pbar = tqdm(total=5000)
         #while(x_train!=[] and y_train!=[]):
         while(iter<5000): # 5000 iterations
             for image_hash in x_train.keys():
@@ -387,13 +387,13 @@ if __name__=="__main__":
                 batch_voxel[0,:,:,:,0]= vox < 1
                 batch_voxel[0,:,:,:,1]= vox
 
-                l,u,o = sess.run([loss_, optimizer, obj], feed_dict={X: ims, Y: batch_voxel})
+                l,u,o = sess.run([loss_, updates, obj], feed_dict={X: ims, Y: batch_voxel})
 
                 print("OBJECT: " + str(iter)+" LOSS: "+str(l))
                 with open("log.txt", "a") as myfile:
-                    myfile.write("Iteration: "+str(iter)+" Loss: "+str(l))
+                    myfile.write("Iteration: "+str(iter)+" Loss: "+str(l)+"\n")
                 #tf.summary.histogram('loss', forw[0])
-                if iter % 10 == 0:
+                if iter % 1 == 0:
                     print("Testing Model at Iter ",iter)
                     print("HASH "+image_hash)
                     # Save the prediction to an OBJ file (mesh file).
