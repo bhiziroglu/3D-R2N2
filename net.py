@@ -355,16 +355,16 @@ if __name__=="__main__":
         iter = 0
         print("Started training.")
 
+        with open("log.txt", "w") as myfile:
+            myfile.write("3D-R2N2 Started training.")
+
         x_train = dataset.train_data()
         y_train = dataset.train_labels()
-        print("DXDXDXD")
-        print(len(x_train))
-
 
         pbar = tqdm(total=dataset.TOTAL_SIZE)
 
-        while(x_train!=[] and y_train!=[]):
-
+        #while(x_train!=[] and y_train!=[]):
+        while(iter<5000): # 5000 iterations
             for image_hash in x_train.keys():
                 iter+=1
 
@@ -374,8 +374,6 @@ if __name__=="__main__":
                 ims = []
 
                 for image in x_train[image_hash]:
-                    #initial_state = sess.run([forward_pass], feed_dict={X: image, S: initial_state})
-                    #initial_state = np.array(initial_state[0])
                     ims.append(image)
                 
                 ims = tf.convert_to_tensor(ims)
@@ -395,7 +393,7 @@ if __name__=="__main__":
                 with open("log.txt", "a") as myfile:
                     myfile.write("Iteration: "+str(iter)+" Loss: "+str(l))
                 #tf.summary.histogram('loss', forw[0])
-                if iter % 3 == 0:
+                if iter % 10 == 0:
                     print("Testing Model at Iter ",iter)
                     print("HASH "+image_hash)
                     # Save the prediction to an OBJ file (mesh file).
@@ -409,8 +407,8 @@ if __name__=="__main__":
 
 
                     
-            x_train = dataset.train_data()
-            y_train = dataset.train_labels()
+            #x_train = dataset.train_data()
+            #y_train = dataset.train_labels()
 
         pbar.close()
         print("Finished!")
