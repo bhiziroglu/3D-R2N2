@@ -585,14 +585,16 @@ if __name__=="__main__":
             l,u,o = sess.run([loss_, updates, obj], feed_dict={X: ims, Y: vox})
             #pred, loss = sess.run([sample, loss_op], feed_dict={S: initial_state, Y: vox})
             print("Object: ",iter," LOSS:  ",l)
+            with open("log.txt", "a") as myfile:
+                myfile.write("Iteration: "+str(iter)+" Loss: "+str(l))
             #tf.summary.histogram('loss', forw[0])
-            if iter % 2 == 0:
+            if iter % 5 == 0:
                 print("Testing Model at Iter ",iter)
                 print("HASH "+image_hash)
                 # Save the prediction to an OBJ file (mesh file).
                 #predict(w,"test_image.png",iter)
                 test_predict(o[0,:,:,:,1],iter)
-                test_predict(vox,iter+10)
+                #test_predict(vox,iter+10)
         
 
 
