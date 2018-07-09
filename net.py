@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import dataset
 from tqdm import tqdm
+from tensorflow.python import debug as tf_debug
 
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
@@ -239,11 +240,14 @@ def build_graph():
         res10 = tf.add(conv10c,conv10b)
 
         conv11a = tf.nn.conv3d(res10,w_decoder[10],strides=[1,1,1,1,1],padding="SAME")
-        conv11a = tf.nn.leaky_relu(conv11a)  
+        ##conv11a = tf.nn.leaky_relu(conv11a)  
 
-        conv11a = tf.contrib.layers.layer_norm(conv11a) #Norm layer
+        #conv11a = tf.contrib.layers.layer_norm(conv11a) #Norm layer
+        exp_x = tf.exp(conv11a, name="Decoder_Output")
+        sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
+        prediction = exp_x / sum_exp_x
 
-    loss_ = paper_loss(conv11a,Y) #conv11a is final prediction. Y is ground truth.
+    loss_ = paper_loss(prediction,Y) #conv11a is final prediction. Y is ground truth.
 
     return loss_, conv11a
 
@@ -319,6 +323,7 @@ loss_,obj = build_graph()
 #loss_op = tf.nn.softmax_cross_entropy_with_logits_v2(logits=obj,labels=Y)
 #sample = decoder_pass
 
+epsilon = 1e-10
 
 # Optimization
 optimizer = tf.train.AdamOptimizer(1e-4)
@@ -326,7 +331,7 @@ grads_vars = optimizer.compute_gradients(loss_)
 clipped_gradients = []
 for grad,var in grads_vars:
     clipped_gradients.append(
-        (tf.clip_by_value(grad,5.0,-5.0),var)) # 1 is max_gradient_norm)
+        (tf.clip_by_value(grad,epsilon,-epsilon),var)) # 1 is max_gradient_norm)
 
 updates = optimizer.apply_gradients(clipped_gradients)
 # Calculate and clip gradients
@@ -343,6 +348,9 @@ if __name__=="__main__":
 
     # Start training
     with tf.Session() as sess:
+
+        #Debugger   
+        sess = tf_debug.TensorBoardDebugWrapperSession(sess, "Berkan-MacBook-Pro.local:4334")
 
         # Run the initializer
         sess.run(init)
@@ -393,7 +401,7 @@ if __name__=="__main__":
                 with open("log.txt", "a") as myfile:
                     myfile.write("Iteration: "+str(iter)+" Loss: "+str(l)+"\n")
                 #tf.summary.histogram('loss', forw[0])
-                if iter % 1 == 0:
+                if iter % 10 == 0:
                     print("Testing Model at Iter ",iter)
                     print("HASH "+image_hash)
                     # Save the prediction to an OBJ file (mesh file).
