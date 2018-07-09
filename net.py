@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 import dataset
 from tqdm import tqdm
-from tensorflow.python import debug as tf_debug
+#from tensorflow.python import debug as tf_debug
 
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
@@ -73,12 +73,12 @@ def build_graph():
 
     with tf.name_scope("encoder_gru_weights"):
         w = [tf.get_variable(
-            "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=1231), trainable=True) 
+            "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=666), trainable=True) 
             for _,kernel in enumerate(encoder_gru_kernel_shapes)]
 
     with tf.name_scope("decoder_weights"):
         w_decoder = [tf.get_variable(
-            "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=1231), trainable=True) 
+            "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=6666), trainable=True) 
             for _,kernel in enumerate(decoder_kernel_shapes)]
 
     with tf.name_scope("Encoder"):
@@ -245,11 +245,11 @@ def build_graph():
         #conv11a = tf.contrib.layers.layer_norm(conv11a) #Norm layer
         exp_x = tf.exp(conv11a, name="Decoder_Output")
         sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
-        prediction = exp_x / sum_exp_x
+        prediction = tf.divide(exp_x,sum_exp_x)
 
-    loss_ = paper_loss(prediction,Y) #conv11a is final prediction. Y is ground truth.
+    loss_ = paper_loss(conv11a,Y) #conv11a is final prediction. Y is ground truth.
 
-    return loss_, conv11a
+    return loss_, prediction
 
  
 
@@ -323,17 +323,15 @@ loss_,obj = build_graph()
 #loss_op = tf.nn.softmax_cross_entropy_with_logits_v2(logits=obj,labels=Y)
 #sample = decoder_pass
 
-epsilon = 1e-10
-
 # Optimization
-optimizer = tf.train.AdamOptimizer(1e-4)
-grads_vars = optimizer.compute_gradients(loss_)
-clipped_gradients = []
-for grad,var in grads_vars:
-    clipped_gradients.append(
-        (tf.clip_by_value(grad,epsilon,-epsilon),var)) # 1 is max_gradient_norm)
+optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss_)
+#grads_vars = optimizer.compute_gradients(loss_)
+#clipped_gradients = []
+#for grad,var in grads_vars:
+#    clipped_gradients.append(
+#        (tf.clip_by_value(grad,5.0,-5.0),var)) # 1 is max_gradient_norm)
 
-updates = optimizer.apply_gradients(clipped_gradients)
+#updates = optimizer.apply_gradients(clipped_gradients)
 # Calculate and clip gradients
 #params = tf.trainable_variables()
 #gradients = tf.gradients(loss_)
@@ -350,7 +348,7 @@ if __name__=="__main__":
     with tf.Session() as sess:
 
         #Debugger   
-        sess = tf_debug.TensorBoardDebugWrapperSession(sess, "Berkan-MacBook-Pro.local:4334")
+        #sess = tf_debug.TensorBoardDebugWrapperSession(sess, "Berkan-MacBook-Pro.local:4334")
 
         # Run the initializer
         sess.run(init)
@@ -369,10 +367,10 @@ if __name__=="__main__":
         x_train = dataset.train_data()
         y_train = dataset.train_labels()
 
-        #pbar = tqdm(total=dataset.TOTAL_SIZE)
-        pbar = tqdm(total=5000)
-        #while(x_train!=[] and y_train!=[]):
-        while(iter<5000): # 5000 iterations
+        pbar = tqdm(total=dataset.TOTAL_SIZE)
+        #pbar = tqdm(total=10)
+        while(x_train!=[] and y_train!=[]):
+        #while(iter<10): # 5000 iterations
             for image_hash in x_train.keys():
                 iter+=1
 
@@ -395,13 +393,13 @@ if __name__=="__main__":
                 batch_voxel[0,:,:,:,0]= vox < 1
                 batch_voxel[0,:,:,:,1]= vox
 
-                l,u,o = sess.run([loss_, updates, obj], feed_dict={X: ims, Y: batch_voxel})
+                l,u,o = sess.run([loss_, optimizer, obj], feed_dict={X: ims, Y: batch_voxel})
 
                 print("OBJECT: " + str(iter)+" LOSS: "+str(l))
                 with open("log.txt", "a") as myfile:
                     myfile.write("Iteration: "+str(iter)+" Loss: "+str(l)+"\n")
                 #tf.summary.histogram('loss', forw[0])
-                if iter % 10 == 0:
+                if iter % 5 == 0:
                     print("Testing Model at Iter ",iter)
                     print("HASH "+image_hash)
                     # Save the prediction to an OBJ file (mesh file).
@@ -415,8 +413,8 @@ if __name__=="__main__":
 
 
                     
-            #x_train = dataset.train_data()
-            #y_train = dataset.train_labels()
+            x_train = dataset.train_data()
+            y_train = dataset.train_labels()
 
         pbar.close()
         print("Finished!")
