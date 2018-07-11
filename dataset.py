@@ -7,7 +7,7 @@ from PIL import Image
 import tensorflow as tf
 
 
-BATCH_SIZE = 2
+BATCH_SIZE = 1
 label_dir = os.listdir('./03211117_labelsR')
 data = os.listdir('./03211117R')
 TOTAL_SIZE = len(data)
