@@ -16,7 +16,7 @@ NUM_OF_IMAGES = 24
 def initialize_placeholders():
     with tf.name_scope("Placeholders"):
         X = tf.placeholder(tf.float32, shape=[NUM_OF_IMAGES, 127, 127, 3],name = "X")
-        Y = tf.placeholder(tf.float32, shape=[1, 32, 32, 32, 2],name = "Y")
+        Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 2],name = "Y")
     return X,Y
 
 X,Y = initialize_placeholders()
@@ -156,15 +156,14 @@ def build_graph():
         conv10a = tf.nn.leaky_relu(conv10a,alpha=0.01)  
 
         conv11a = tf.nn.conv3d(conv10a,w_decoder[4],strides=[1,1,1,1,1],padding="SAME")
-        conv11a = tf.nn.leaky_relu(conv11a,alpha=0.01)  
-        #conv11a = tf.contrib.layers.layer_norm(conv11a) #Norm layer
+        ''' (32, 32, 32, 1, 2) '''
 
-    #conv11a = tf.reduce_max(conv11a,axis=4,keepdims=True)
+    max_value = np.argmax(np.asarray(conv11a))
+    conv11a = conv11a - max_value
     exp_x = tf.exp(conv11a)
-    sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
-
-    #loss_ = paper_loss(conv11a,sum_exp_x,Y) #conv11a is final prediction. Y is ground truth.
-    loss_ = paper_loss(conv11a,sum_exp_x,Y)
+    sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) 
+    ''' (32, 32, 32, 1, 1) '''
+    loss_ = loss(conv11a,sum_exp_x,Y)
     pred = exp_x / sum_exp_x
     return loss_, pred
 
@@ -172,7 +171,7 @@ def build_graph():
 
 
 
-def paper_loss(y,sum_exp_x,yhat):
+def loss(y,sum_exp_x,yhat):
     return tf.reduce_mean(
         tf.reduce_sum(-yhat * y,axis=4,keepdims=True)+tf.log(sum_exp_x)
     )
@@ -184,46 +183,6 @@ def paper_loss(y,sum_exp_x,yhat):
 def test_predict(pred,ind):
     pred_name = "test_pred_"+str(ind)+".obj"
     voxel.voxel2obj(pred_name,pred)
-
-
-def berkan_loss2(y,yhat):
-    epsilon = 1e-10
-    y = tf.clip_by_value(y, epsilon, 1-epsilon)    
-    add1 = tf.log(yhat) * y
-    add2 = (1-y)*tf.log(1-yhat)
-    add3 = add1 + add2
-    return tf.reduce_sum(add3)
-    
-
-def berkan_loss(x,y):
-    label = y
-    epsilon = 1e-10
-    #softmax = tf.clip_by_value(
-    #    x, epsilon, 1-epsilon)
-    log_softmax = tf.log(x)
-
-    cross_entropy = tf.reduce_sum(-tf.multiply(label,
-                                    log_softmax), axis=-1)
-
-    losses = tf.reduce_mean(cross_entropy, axis=[1, 2, 3])
-    l = tf.reduce_mean(losses)         
-    return l                       
-
-    
-
-
-
-def princeton_loss(x,y):
-    x = x[0,:,:,:,1]
-    epsilon = 1e-10
-    s = tf.clip_by_value(tf.nn.softmax(x),epsilon,1-epsilon)
-    log_softmax = tf.log(s)
-    cross_entropy = tf.reduce_sum(-tf.multiply(y,log_softmax),axis=-1)
-    losses = tf.reduce_mean(cross_entropy)
-    with tf.name_scope("loss"):
-        l = tf.reduce_mean(losses)
-    return l
-
 
 
 def unpool(value):
@@ -305,9 +264,9 @@ if __name__=="__main__":
                 vox = tf.convert_to_tensor(y_train[image_hash])
                 vox = tf.cast(vox,tf.float32)
                 vox = vox.eval()
-                batch_voxel = np.zeros((1,32,32,32,2), dtype=float)  
-                batch_voxel[0,:,:,:,0]= vox < 1
-                batch_voxel[0,:,:,:,1]= vox
+                batch_voxel = np.zeros((32,32,32,1,2), dtype=float)  
+                batch_voxel[:,:,:,0,0]= vox < 1
+                batch_voxel[:,:,:,0,1]= vox
 
                 l,u,o = sess.run([loss_, updates, pred_], feed_dict={X: ims, Y: batch_voxel})
 
@@ -320,7 +279,7 @@ if __name__=="__main__":
                     print("HASH "+image_hash)
                     # Save the prediction to an OBJ file (mesh file).
                     #predict(w,"test_image.png",iter)
-                    test_predict(o[0,:,:,:,0],iter)
+                    test_predict(o[:,:,:,0,1],iter)
                     #test_predict(vox,iter+10)
                 
                 pbar.update(1)
