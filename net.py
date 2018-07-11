@@ -16,7 +16,7 @@ NUM_OF_IMAGES = 24
 def initialize_placeholders():
     with tf.name_scope("Placeholders"):
         X = tf.placeholder(tf.float32, shape=[NUM_OF_IMAGES, 127, 127, 3],name = "X")
-        Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 2],name = "Y")
+        Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 1],name = "Y")
     return X,Y
 
 X,Y = initialize_placeholders()
@@ -42,7 +42,11 @@ decoder_kernel_shapes = [
     [3,3,3,n_deconvfilter[1],n_deconvfilter[2]], #conv8a #2
     [3,3,3,n_deconvfilter[2],n_deconvfilter[3]], #conv9a #4
     [3,3,3,n_deconvfilter[3],n_deconvfilter[4]], #conv10a#7
-    [3,3,3,n_deconvfilter[4],n_deconvfilter[5]]  #conv11a #10
+    [3,3,3,n_deconvfilter[4],n_deconvfilter[5]],  #conv11a #10
+    #Unpool weights
+    [64,512],    #unpool7 #5
+    [512,4096],  #unpool8
+    [4096,32768] #unpool9
 ]
 
 
@@ -139,16 +143,15 @@ def build_graph():
     
     with tf.name_scope("Decoder"):
         
-        #prev_s = tf.transpose(prev_s,perm=[0,1,4,3,2]) #[(1, 4, 128, 4, 4)] -> [(1, 4, 4, 4, 128)]
-        unpool7 = unpool(prev_s)
+        unpool7 = unpool_with_grad(prev_s,w_decoder[5])
         conv7a = tf.nn.conv3d(unpool7,w_decoder[0],strides=[1,1,1,1,1],padding="SAME")
         conv7a = tf.nn.leaky_relu(conv7a,alpha=0.01)
 
-        unpool8 = unpool(conv7a)
+        unpool8 = unpool_with_grad(conv7a,w_decoder[6])
         conv8a = tf.nn.conv3d(unpool8,w_decoder[1],strides=[1,1,1,1,1],padding="SAME")
         conv8a = tf.nn.leaky_relu(conv8a,alpha=0.01)   
 
-        unpool9 = unpool(conv8a)
+        unpool9 = unpool_with_grad(conv8a,w_decoder[7])
         conv9a = tf.nn.conv3d(unpool9,w_decoder[2],strides=[1,1,1,1,1],padding="SAME")
         conv9a = tf.nn.leaky_relu(conv9a,alpha=0.01)
 
@@ -164,8 +167,8 @@ def build_graph():
     sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) 
     ''' (32, 32, 32, 1, 1) '''
     loss_ = loss(conv11a,sum_exp_x,Y)
-    pred = exp_x / sum_exp_x
-    return loss_, pred
+    pred_ = exp_x / sum_exp_x
+    return loss_, pred_
 
  
 
@@ -184,6 +187,21 @@ def test_predict(pred,ind):
     pred_name = "test_pred_"+str(ind)+".obj"
     voxel.voxel2obj(pred_name,pred)
 
+
+def unpool_with_grad(value,w):
+    #4,4,4,1,128#
+    dim = value.shape[0]
+    dim1 = value.shape[4]
+    dim4 = w.shape[1]
+    #value = tf.reshape(value,[dim*dim*dim,1,dim1])
+    value = tf.reshape(value,[dim*dim*dim,1*dim1])
+    value = tf.transpose(value,perm=[1,0]) #M,N to N,M
+    value = tf.matmul(value,w) # w -> [4*4*4,8*8*8] , value -> [1*128,8*8*8]
+    #value = tf.reshape(value,[1,dim1,(dim*2)*(dim*2)*(dim*2)])
+    value = tf.reshape(value,[1,dim1,(dim*2),(dim*2),(dim*2)])
+    value = tf.transpose(value,perm=[2,3,4,0,1])
+    return value
+    
 
 def unpool(value):
     """
@@ -248,9 +266,6 @@ if __name__=="__main__":
             for image_hash in x_train.keys():
                 iter+=1
 
-                initial_state = tf.truncated_normal([1,n_gru_vox,n_deconvfilter[0],n_gru_vox,n_gru_vox], stddev=0.5)
-                initial_state = initial_state.eval()
-
                 ims = []
 
                 for image in x_train[image_hash]:
@@ -264,9 +279,9 @@ if __name__=="__main__":
                 vox = tf.convert_to_tensor(y_train[image_hash])
                 vox = tf.cast(vox,tf.float32)
                 vox = vox.eval()
-                batch_voxel = np.zeros((32,32,32,1,2), dtype=float)  
-                batch_voxel[:,:,:,0,0]= vox < 1
-                batch_voxel[:,:,:,0,1]= vox
+                batch_voxel = np.zeros((32,32,32,1,1), dtype=float)  
+                batch_voxel[:,:,:,0,0]= vox
+                #batch_voxel[:,:,:,0,1]= vox
 
                 l,u,o = sess.run([loss_, updates, pred_], feed_dict={X: ims, Y: batch_voxel})
 
@@ -277,10 +292,7 @@ if __name__=="__main__":
                 if iter % 5 == 0:
                     print("Testing Model at Iter ",iter)
                     print("HASH "+image_hash)
-                    # Save the prediction to an OBJ file (mesh file).
-                    #predict(w,"test_image.png",iter)
                     test_predict(o[:,:,:,0,1],iter)
-                    #test_predict(vox,iter+10)
                 
                 pbar.update(1)
             
