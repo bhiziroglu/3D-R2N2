@@ -16,7 +16,7 @@ NUM_OF_IMAGES = 24
 def initialize_placeholders():
     with tf.name_scope("Placeholders"):
         X = tf.placeholder(tf.float32, shape=[NUM_OF_IMAGES, 127, 127, 3],name = "X")
-        Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 1],name = "Y")
+        Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 2],name = "Y")
     return X,Y
 
 X,Y = initialize_placeholders()
@@ -162,14 +162,15 @@ def build_graph():
         conv11a = tf.nn.conv3d(conv10a,w_decoder[4],strides=[1,1,1,1,1],padding="SAME")
         ''' (32, 32, 32, 1, 2) '''
 
-    max_value = np.argmax(np.asarray(conv11a))
-    conv11a = conv11a - max_value
-    exp_x = tf.exp(conv11a)
-    sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) 
-    ''' (32, 32, 32, 1, 1) '''
+    #max_value = np.argmax(np.asarray(conv11a))
+    #conv11a = conv11a - max_value
+    #exp_x = tf.exp(conv11a)
+    #sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) 
+    sum_exp_x = tf.nn.softmax(conv11a,axis=-1)
+    #''' (32, 32, 32, 1, 2) '''
     loss_ = loss(conv11a,sum_exp_x,Y)
-    pred_ = exp_x / sum_exp_x
-
+    pred_ = sum_exp_x
+    #pred_ = conv11a
     #For tensorboard
     tf.summary.scalar("loss", loss_)
 
@@ -179,8 +180,15 @@ def build_graph():
 
 def loss(y,sum_exp_x,yhat):
     return tf.reduce_mean(
-        tf.reduce_sum(-yhat * y,axis=4,keepdims=True)+tf.log(sum_exp_x)
+        tf.log(tf.nn.softmax(-yhat * y,axis=-1))+tf.log(sum_exp_x)
     )
+
+def loss2(logit,label):
+    logit = logit > 0.4
+    logit = tf.cast(logit,tf.float32)
+    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=Y)
+    loss = tf.reduce_mean(cross_entropy)
+    return loss
 
 def test_predict(pred,ind):
     pred_name = "test_pred_"+str(ind)+".obj"
@@ -258,9 +266,9 @@ if __name__=="__main__":
                 vox = tf.convert_to_tensor(y_train[image_hash])
                 vox = tf.cast(vox,tf.float32)
                 vox = vox.eval()
-                batch_voxel = np.zeros((32,32,32,1,1), dtype=float)  
-                batch_voxel[:,:,:,0,0]= vox
-                #batch_voxel[:,:,:,0,1]= vox
+                batch_voxel = np.zeros((32,32,32,1,2), dtype=float)  
+                batch_voxel[:,:,:,0,0]= vox < 1
+                batch_voxel[:,:,:,0,1]= vox
 
                 l,u,o,s = sess.run([loss_, updates, pred_, summ], feed_dict={X: ims, Y: batch_voxel})
 
@@ -273,7 +281,7 @@ if __name__=="__main__":
                 if iter % 5 == 0:
                     print("Testing Model at Iter ",iter)
                     print("HASH "+image_hash)
-                    test_predict(o[:,:,:,0,1],iter)
+                    test_predict(o[:,:,:,0,1] > [0.4],iter)
                 
                 pbar.update(1)
             
