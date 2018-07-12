@@ -42,27 +42,28 @@ decoder_kernel_shapes = [
     [3,3,3,n_deconvfilter[1],n_deconvfilter[2]], #conv8a #2
     [3,3,3,n_deconvfilter[2],n_deconvfilter[3]], #conv9a #4
     [3,3,3,n_deconvfilter[3],n_deconvfilter[4]], #conv10a#7
-    [3,3,3,n_deconvfilter[4],n_deconvfilter[5]],  #conv11a #10
-    #Unpool weights
-    [64,512],    #unpool7 #5
-    [512,4096],  #unpool8
-    [4096,32768] #unpool9
+    [3,3,3,n_deconvfilter[4],n_deconvfilter[5]]  #conv11a #10
 ]
 
 
+# Init weights
+
+with tf.name_scope("encoder_gru_weights"):
+    w = [tf.get_variable(
+        "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4444), trainable=True) 
+        for _,kernel in enumerate(encoder_gru_kernel_shapes)]
+    for w_ in w:
+        tf.summary.histogram(w_.name, w_)
+
+with tf.name_scope("decoder_weights"):
+    w_decoder = [tf.get_variable(
+        "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4321), trainable=True) 
+        for _,kernel in enumerate(decoder_kernel_shapes)]
+    for w_ in w_decoder:
+        tf.summary.histogram(w_.name, w_)
+
 def build_graph():
-    
-    # Init weights
 
-    with tf.name_scope("encoder_gru_weights"):
-        w = [tf.get_variable(
-            "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4444), trainable=True) 
-            for _,kernel in enumerate(encoder_gru_kernel_shapes)]
-
-    with tf.name_scope("decoder_weights"):
-        w_decoder = [tf.get_variable(
-            "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4321), trainable=True) 
-            for _,kernel in enumerate(decoder_kernel_shapes)]
 
     with tf.name_scope("Encoder"):
         
@@ -143,15 +144,15 @@ def build_graph():
     
     with tf.name_scope("Decoder"):
         
-        unpool7 = unpool_with_grad(prev_s,w_decoder[5])
+        unpool7 = unpool(prev_s)
         conv7a = tf.nn.conv3d(unpool7,w_decoder[0],strides=[1,1,1,1,1],padding="SAME")
         conv7a = tf.nn.leaky_relu(conv7a,alpha=0.01)
 
-        unpool8 = unpool_with_grad(conv7a,w_decoder[6])
+        unpool8 = unpool(conv7a)
         conv8a = tf.nn.conv3d(unpool8,w_decoder[1],strides=[1,1,1,1,1],padding="SAME")
         conv8a = tf.nn.leaky_relu(conv8a,alpha=0.01)   
 
-        unpool9 = unpool_with_grad(conv8a,w_decoder[7])
+        unpool9 = unpool(conv8a)
         conv9a = tf.nn.conv3d(unpool9,w_decoder[2],strides=[1,1,1,1,1],padding="SAME")
         conv9a = tf.nn.leaky_relu(conv9a,alpha=0.01)
 
@@ -168,9 +169,11 @@ def build_graph():
     ''' (32, 32, 32, 1, 1) '''
     loss_ = loss(conv11a,sum_exp_x,Y)
     pred_ = exp_x / sum_exp_x
-    return loss_, pred_
 
- 
+    #For tensorboard
+    tf.summary.scalar("loss", loss_)
+
+    return loss_, pred_
 
 
 
@@ -179,47 +182,19 @@ def loss(y,sum_exp_x,yhat):
         tf.reduce_sum(-yhat * y,axis=4,keepdims=True)+tf.log(sum_exp_x)
     )
 
-
-
-
-
 def test_predict(pred,ind):
     pred_name = "test_pred_"+str(ind)+".obj"
     voxel.voxel2obj(pred_name,pred)
 
+def unpool(x): #unpool_3d_zero_filled
+    # https://github.com/tensorflow/tensorflow/issues/2169
+    out = tf.concat([x, tf.zeros_like(x)], 2)
+    out = tf.concat([out, tf.zeros_like(out)], 1)
+    out = tf.concat([out, tf.zeros_like(out)], 0)
 
-def unpool_with_grad(value,w):
-    #4,4,4,1,128#
-    dim = value.shape[0]
-    dim1 = value.shape[4]
-    dim4 = w.shape[1]
-    #value = tf.reshape(value,[dim*dim*dim,1,dim1])
-    value = tf.reshape(value,[dim*dim*dim,1*dim1])
-    value = tf.transpose(value,perm=[1,0]) #M,N to N,M
-    value = tf.matmul(value,w) # w -> [4*4*4,8*8*8] , value -> [1*128,8*8*8]
-    #value = tf.reshape(value,[1,dim1,(dim*2)*(dim*2)*(dim*2)])
-    value = tf.reshape(value,[1,dim1,(dim*2),(dim*2),(dim*2)])
-    value = tf.transpose(value,perm=[2,3,4,0,1])
-    return value
-    
-
-def unpool(value):
-    """
-    :param value: A Tensor of shape [b, d0, d1, ..., dn, ch]
-    :return: A Tensor of shape [b, 2*d0, 2*d1, ..., 2*dn, ch]
-    """ #4,4,4,1,128# -> #1,4,4,4,128#
-    with tf.name_scope("Unpool"):
-        value = tf.transpose(value,perm=[3,1,2,0,4])
-        sh = value.get_shape().as_list()
-        dim = len(sh[1:-1])
-        out = (tf.reshape(value, [-1] + sh[-dim:]))
-        for i in range(dim, 0, -1):
-            out = tf.concat([out, tf.zeros_like(out)], i)
-        out_size = [-1] + [s * 2 for s in sh[1:-1]] + [sh[-1]]
-        out = tf.reshape(out, out_size)
-        out = tf.transpose(out,perm=[3,1,2,0,4])
-    return out
-
+    sh = x.get_shape().as_list()
+    out_size = [sh[0]*2, sh[1] * 2, sh[2] * 2, -1, sh[4]]
+    return tf.reshape(out, out_size)
 
 loss_, pred_ = build_graph()
 
@@ -228,8 +203,10 @@ optimizer = tf.train.AdamOptimizer(1e-4)
 grads_vars = optimizer.compute_gradients(loss_)
 clipped_gradients = []
 for grad,var in grads_vars:
-    clipped_gradients.append(
-        (tf.clip_by_value(grad,5.0,-5.0),var)) # 1 is max_gradient_norm)
+    if not grad is None:
+          clipped_gradients.append((grad, var))
+    #clipped_gradients.append(
+    #    (tf.clip_by_value(grad,5.0,-5.0),var)) # 1 is max_gradient_norm)
 
 updates = optimizer.apply_gradients(clipped_gradients)
 
@@ -246,9 +223,10 @@ if __name__=="__main__":
         sess.run(init)
 
         # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
-        merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter('./train',
-                                            sess.graph)
+        summ = tf.summary.merge_all()
+
+        train_writer = tf.summary.FileWriter('./train')
+        train_writer.add_graph(sess.graph)
                                             
         iter = 0
         print("Started training.")
@@ -264,6 +242,7 @@ if __name__=="__main__":
         #while(x_train!=[] and y_train!=[]):
         while(iter<10): # 5000 iterations
             for image_hash in x_train.keys():
+                
                 iter+=1
 
                 ims = []
@@ -283,8 +262,10 @@ if __name__=="__main__":
                 batch_voxel[:,:,:,0,0]= vox
                 #batch_voxel[:,:,:,0,1]= vox
 
-                l,u,o = sess.run([loss_, updates, pred_], feed_dict={X: ims, Y: batch_voxel})
+                l,u,o,s = sess.run([loss_, updates, pred_, summ], feed_dict={X: ims, Y: batch_voxel})
 
+                train_writer.add_summary(s, iter)
+                
                 print("OBJECT: " + str(iter)+" LOSS: "+str(l))
                 with open("log.txt", "a") as myfile:
                     myfile.write("Iteration: "+str(iter)+" Loss: "+str(l)+"\n")
@@ -296,10 +277,6 @@ if __name__=="__main__":
                 
                 pbar.update(1)
             
-            
-
-
-                    
             #x_train = dataset.train_data()
             #y_train = dataset.train_labels()
 

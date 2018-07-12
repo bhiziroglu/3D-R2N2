@@ -247,21 +247,16 @@ def build_graph():
     sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
 
     #loss_ = paper_loss(conv11a,sum_exp_x,Y) #conv11a is final prediction. Y is ground truth.
-    loss_ = paper_loss(conv11a,sum_exp_x,Y)
+    loss_ = loss(conv11a,sum_exp_x,Y)
     pred = exp_x / sum_exp_x
     return loss_, pred
 
  
 
-
-
-def paper_loss(y,sum_exp_x,yhat):
+def loss(y,sum_exp_x,yhat):
     return tf.reduce_mean(
         tf.reduce_sum(-yhat * y,axis=4,keepdims=True)+tf.log(sum_exp_x)
     )
-
-
-
 
 
 def test_predict(pred,ind):
@@ -269,61 +264,23 @@ def test_predict(pred,ind):
     voxel.voxel2obj(pred_name,pred)
 
 
-def berkan_loss2(y,yhat):
-    epsilon = 1e-10
-    y = tf.clip_by_value(y, epsilon, 1-epsilon)    
-    add1 = tf.log(yhat) * y
-    add2 = (1-y)*tf.log(1-yhat)
-    add3 = add1 + add2
-    return tf.reduce_sum(add3)
-    
+def unpool_2d_zero_filled(x):
+    out = tf.concat([x, tf.zeros_like(x)], 3)
+    out = tf.concat([out, tf.zeros_like(out)], 2)
 
-def berkan_loss(x,y):
-    label = y
-    epsilon = 1e-10
-    #softmax = tf.clip_by_value(
-    #    x, epsilon, 1-epsilon)
-    log_softmax = tf.log(x)
+    sh = x.get_shape().as_list()
+    out_size = [-1, sh[1] * 2, sh[2] * 2, sh[3]]
+    return tf.reshape(out, out_size)
 
-    cross_entropy = tf.reduce_sum(-tf.multiply(label,
-                                    log_softmax), axis=-1)
+def unpool(x): #unpool_3d_zero_filled
+    # https://github.com/tensorflow/tensorflow/issues/2169
+    out = tf.concat([x, tf.zeros_like(x)], 4)
+    out = tf.concat([out, tf.zeros_like(out)], 3)
+    out = tf.concat([out, tf.zeros_like(out)], 2)
 
-    losses = tf.reduce_mean(cross_entropy, axis=[1, 2, 3])
-    l = tf.reduce_mean(losses)         
-    return l                       
-
-    
-
-
-
-def princeton_loss(x,y):
-    x = x[0,:,:,:,1]
-    epsilon = 1e-10
-    s = tf.clip_by_value(tf.nn.softmax(x),epsilon,1-epsilon)
-    log_softmax = tf.log(s)
-    cross_entropy = tf.reduce_sum(-tf.multiply(y,log_softmax),axis=-1)
-    losses = tf.reduce_mean(cross_entropy)
-    with tf.name_scope("loss"):
-        l = tf.reduce_mean(losses)
-    return l
-
-
-
-def unpool(value):
-    """
-    :param value: A Tensor of shape [b, d0, d1, ..., dn, ch]
-    :return: A Tensor of shape [b, 2*d0, 2*d1, ..., 2*dn, ch]
-    """
-    with tf.name_scope("Unpool"):
-        sh = value.get_shape().as_list()
-        dim = len(sh[1:-1])
-        out = (tf.reshape(value, [-1] + sh[-dim:]))
-        for i in range(dim, 0, -1):
-            out = tf.concat([out, tf.zeros_like(out)], i)
-        out_size = [-1] + [s * 2 for s in sh[1:-1]] + [sh[-1]]
-        out = tf.reshape(out, out_size)
-    return out
-
+    sh = x.get_shape().as_list()
+    out_size = [-1, sh[1] * 2, sh[2] * 2, sh[3] * 2, sh[4]]
+    return tf.reshape(out, out_size)
 
 loss_, pred_ = build_graph()
 
