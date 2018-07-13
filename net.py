@@ -27,10 +27,12 @@ NUM_OF_IMAGES = 24
 
 # tf Graph input (only pictures)
 X = tf.placeholder(tf.float32, shape=[None, 127, 127, 3],name = "X")
+p_H = tf.placeholder(tf.float32, [n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]], name="p_H")
 Y = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "Y")
+G = tf.placeholder(tf.float32, shape=[4,4,4,1,128],name = "GRU_OUT")
+#D = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "DECODER_OUT")
 
-
-initializer = tf.glorot_normal_initializer()
+initializer = tf.glorot_normal_initializer(seed=123)
 
 weights = {
     #Encoder Part
@@ -41,16 +43,42 @@ weights = {
     'conv5a': tf.Variable(initializer([3,3,n_convfilter[3],n_convfilter[4]])),
     'conv6a': tf.Variable(initializer([3,3,n_convfilter[4],n_convfilter[5]])),
     'fc7': tf.Variable(initializer([1,n_fc_filters[0]])),
-    #Gru Translator
-    'tmp_weight': tf.Variable(initializer([n_fc_filters[0],8192])),
+    #Gru Part
+    'w_update': tf.Variable(initializer([1024,8192])), #
+    'update_gate': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[0]])),
+    'reset_gate': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
+    'tanh_reset': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
+    #'prev_s': tf.Variable(tf.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])),
     #Decoder Part
     'conv7a': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[1]])),
     'conv8a': tf.Variable(initializer([3,3,3,n_deconvfilter[1],n_deconvfilter[2]])),
     'conv9a': tf.Variable(initializer([3,3,3,n_deconvfilter[2],n_deconvfilter[3]])),
     'conv10a': tf.Variable(initializer([3,3,3,n_deconvfilter[3],n_deconvfilter[4]])),
-    'conv11a': tf.Variable(initializer([3,3,3,n_deconvfilter[4],n_deconvfilter[5]])),
-
+    'conv11a': tf.Variable(initializer([3,3,3,n_deconvfilter[4],n_deconvfilter[5]]))
 }
+
+biases = {
+    #Encoder Part
+    'conv1a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[0]])),
+    'conv2a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[1]])),
+    'conv3a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[2]])),
+    'conv4a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[3]])),
+    'conv5a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[4]])),
+    'conv6a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[5]])),
+    'fc7':          tf.Variable(tf.random_normal([n_fc_filters[0]])),
+    #Gru Part
+    'w_update':     tf.Variable(tf.random_normal([8192])),
+    'update_gate':  tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[0]])),
+    'reset_gate':   tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[0]])),
+    'tanh_reset':   tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[0]])),
+    #Decoder Part
+    'conv7a':       tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[1]])),
+    'conv8a':       tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[2]])),
+    'conv9a':       tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[3]])),
+    'conv10a':      tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[4]])),
+    'conv11a':      tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[5]]))
+}
+
 
 def unpool(x): #unpool_3d_zero_filled
     # https://github.com/tensorflow/tensorflow/issues/2169
@@ -63,22 +91,6 @@ def unpool(x): #unpool_3d_zero_filled
     return tf.reshape(out, out_size)
 
 
-biases = {
-    #Encoder Part
-    'conv1a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[0]])),
-    'conv2a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[1]])),
-    'conv3a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[2]])),
-    'conv4a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[3]])),
-    'conv5a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[4]])),
-    'conv6a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[5]])),
-    'fc7': tf.Variable(tf.random_normal([n_fc_filters[0]])),
-    #Decoder Part
-    'conv7a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[1]])),
-    'conv8a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[2]])),
-    'conv9a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[3]])),
-    'conv10a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[4]])),
-    'conv11a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[5]]))
-}
 
 # Building the encoder
 def encoder(x):
@@ -141,19 +153,99 @@ def encoder(x):
     return fc7
 
 
+def gru():
+
+    with tf.name_scope("Encoder"):
+
+        # Convolutional Layer #1
+        conv1a = tf.nn.conv2d(input=X,filter=weights['conv1a'],strides=[1,1,1,1],padding="SAME")
+        conv1a = tf.add(conv1a,biases['conv1a'])
+        conv1a = tf.nn.max_pool(conv1a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv1a = tf.nn.leaky_relu(conv1a,alpha=0.01)
+        # [1, 64, 64, 96]
+
+        # Convolutional Layer #2
+        conv2a = tf.nn.conv2d(input=conv1a,filter=weights['conv2a'],strides=[1,1,1,1],padding="SAME")
+        conv2a = tf.add(conv2a,biases['conv2a'])
+        conv2a = tf.nn.max_pool(conv2a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv2a = tf.nn.leaky_relu(conv2a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
+
+        # Convolutional Layer #3
+        conv3a = tf.nn.conv2d(input=conv2a,filter=weights['conv3a'],strides=[1,1,1,1],padding="SAME")
+        conv3a = tf.add(conv3a,biases['conv3a'])
+        conv3a = tf.nn.max_pool(conv3a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv3a = tf.nn.leaky_relu(conv3a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
+
+        # Convolutional Layer #4
+        conv4a = tf.nn.conv2d(input=conv3a,filter=weights['conv4a'],strides=[1,1,1,1],padding="SAME")
+        conv4a = tf.add(conv4a,biases['conv4a'])
+        conv4a = tf.nn.max_pool(conv4a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv4a = tf.nn.leaky_relu(conv4a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
+
+        # Convolutional Layer #5
+        conv5a = tf.nn.conv2d(input=conv4a,filter=weights['conv5a'],strides=[1,1,1,1],padding="SAME")
+        conv5a = tf.add(conv5a,biases['conv5a'])
+        conv5a = tf.nn.max_pool(conv5a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv5a = tf.nn.leaky_relu(conv5a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
+
+        # Convolutional Layer #6
+        conv6a = tf.nn.conv2d(input=conv5a,filter=weights['conv6a'],strides=[1,1,1,1],padding="SAME")
+        conv6a = tf.add(conv6a,biases['conv6a'])
+        conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
+
+        # Flatten Layer
+        #flat7 = tf.reshape(conv6a,[conv6a.shape[0],-1])
+        flat7 = tf.layers.flatten(conv6a)
+        ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
+
+        # FC Layer
+        fc7 = tf.multiply(flat7,weights['fc7'])
+        fc7 = tf.add(fc7,biases['fc7'])
+        ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
+        # [N,1024]
+
+
+    with tf.name_scope("GRU"):
+
+        prev_hidden = p_H
+
+        fc_layer = tf.matmul(fc7, weights['w_update'])  # [1,1024]x[1024,8192] // FC LAYER FOR UPDATE GATE
+        fc_layer = tf.reshape(fc_layer, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
+
+        t_x_s_update = tf.nn.conv3d(prev_hidden, weights['update_gate'], strides=[1, 1, 1, 1, 1], padding="SAME") + fc_layer
+        t_x_s_update = tf.add(t_x_s_update, biases['update_gate']) #Bias
+        t_x_s_reset = tf.nn.conv3d(prev_hidden, weights['reset_gate'], strides=[1, 1, 1, 1, 1], padding="SAME") + fc_layer
+        t_x_s_reset = tf.add(t_x_s_reset, biases['reset_gate']) #Bias
+
+        update_gate = tf.sigmoid(t_x_s_update)
+
+        complement_update_gate = 1 - update_gate
+        reset_gate = tf.sigmoid(t_x_s_reset)
+
+        rs = reset_gate * prev_hidden
+        t_x_rs = tf.nn.conv3d(rs, weights['tanh_reset'], strides=[1, 1, 1, 1, 1], padding="SAME") + fc_layer
+        t_x_rs = tf.add(t_x_rs, biases['tanh_reset']) #Bias
+        tanh_t_x_rs = tf.tanh(t_x_rs)
+
+        gru_out = update_gate * prev_hidden + complement_update_gate * tanh_t_x_rs
+
+
+    return gru_out
+
 # Building the decoder
-def decoder(x):
+def decoder():
 
 
     with tf.name_scope("Decoder"):
 
-        x = tf.matmul(x,weights['tmp_weight'])
-
         #x = tf.reshape(x,[4,4,4,1,2])
-        shape = tf.shape(x)
-        ff = tf.reshape(x , [4,4,4,shape[0],128])
-
-        unpool7 = unpool(ff)
+        unpool7 = unpool(G)
         conv7a = tf.nn.conv3d(unpool7,weights['conv7a'],strides=[1,1,1,1,1],padding="SAME")
         conv7a = tf.add(conv7a,biases['conv7a'])
         conv7a = tf.nn.leaky_relu(conv7a,alpha=0.01)
@@ -176,23 +268,25 @@ def decoder(x):
         conv11a = tf.add(conv11a,biases['conv11a'])
         ''' (32, 32, 32, 1, 2) '''
 
-    return conv11a
+        loss = tf.reduce_mean(
+            tf.reduce_sum(-Y * conv11a, axis=4, keepdims=True) +
+            tf.log(tf.reduce_sum(tf.exp(conv11a), axis=4, keepdims=True))
+        )
+
+    return conv11a, loss
 
 # Construct model
-encoder_op = encoder(X)
-decoder_op = decoder(encoder_op)
+gru_op = gru()
+output, loss = decoder()
 
 # Prediction
-y_pred = decoder_op
+#y_pred = D
 # Targets (Labels) are the input data.
-y_true = Y
+#y_true = Y
 
 # Define loss and optimizer, minimize the squared error
 #loss = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
-loss = tf.reduce_mean(
-            tf.reduce_sum(-y_true * y_pred ,axis=4,keepdims=True)+
-            tf.log(tf.reduce_sum(tf.exp(y_pred),axis=4,keepdims=True))
-        )
+
 
 optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
@@ -220,17 +314,25 @@ with tf.Session() as sess:
 
     while(i<num_steps):
 
+        prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
+
         for image_hash in x_train.keys():
 
             i+=1
-            ims = []
-            for image in x_train[image_hash]:
-                ims.append(image)
-                break
 
-            ims = tf.convert_to_tensor(ims)
-            ims = tf.reshape(ims,[-1,127,127,3])
-            ims = ims.eval()
+            #prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
+
+
+            for image in x_train[image_hash]:
+
+                ims = tf.convert_to_tensor(image)
+                ims = tf.reshape(ims,[-1,127,127,3])
+                ims = ims.eval()
+
+                prev_s = sess.run([gru_op], feed_dict={X: ims, p_H: prev_state})
+                prev_s = np.array(prev_s)
+                prev_s = prev_s[0,:,:,:,:,:]
+                prev_state = prev_s
 
 
             vox = tf.convert_to_tensor(y_train[image_hash])
@@ -238,26 +340,33 @@ with tf.Session() as sess:
             vox = vox.eval()
 
             batch_voxel = np.zeros((32,32,32,1,2), dtype=float)
+
             batch_voxel[:,:,:,0,0]= vox < 1
             batch_voxel[:,:,:,0,1]= vox
 
+
+            #decoder_out, loss = sess.run([decoder_op], feed_dict={G: prev_state, Y: batch_voxel})
+
             # Run optimization op (backprop) and cost op (to get loss value)
-            _, l = sess.run([optimizer, loss], feed_dict={X: ims, Y: batch_voxel})
+            l, o, _ = sess.run([loss, output, optimizer], feed_dict={G: prev_s, Y: batch_voxel})
 
-            if(i%2==0):
+
+            if(i%5==0):
                 print("Creating prediction objects.")
-                pred = sess.run([y_pred], feed_dict={X: ims, Y: batch_voxel})
-                pred = np.array(pred)
-                pred = tf.convert_to_tensor(pred[0,:,:,:,:,:])
 
-                exp_x = tf.exp(pred)
-                sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
+                exp_x = tf.exp(o) #32, 32, 32, 1 ,2
+                sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) # 32, 32, 32, 1, 1
+
 
                 pred = exp_x / sum_exp_x
                 pred = pred.eval()
 
                 pred_name = "test_pred_"+str(i)+".obj"
-                voxel.voxel2obj(pred_name,pred[:,:,:,0,0])
+
+                voxel.voxel2obj(pred_name,pred[:,:,:,0,1])
+            
+
+
 
             # Display logs per step
             print('Step %i: Loss: %f' % (i, l))
