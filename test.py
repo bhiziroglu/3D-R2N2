@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import dataset
 from tensorflow.python import debug as tf_debug
-
+import voxel
 
 # Training Parameters
 learning_rate = 0.01
@@ -63,12 +63,22 @@ def unpool(x): #unpool_3d_zero_filled
     return tf.reshape(out, out_size)
 
 
-#biases = {
-#    'encoder_b1': tf.Variable(tf.random_normal([num_hidden_1])),
-#    'encoder_b2': tf.Variable(tf.random_normal([num_hidden_2])),
-#    'decoder_b1': tf.Variable(tf.random_normal([num_hidden_1])),
-#    'decoder_b2': tf.Variable(tf.random_normal([num_input])),
-#}
+biases = {
+    #Encoder Part
+    'conv1a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[0]])),
+    'conv2a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[1]])),
+    'conv3a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[2]])),
+    'conv4a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[3]])),
+    'conv5a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[4]])),
+    'conv6a': tf.Variable(tf.random_normal([1,1,1,n_convfilter[5]])),
+    'fc7': tf.Variable(tf.random_normal([n_fc_filters[0]])),
+    #Decoder Part
+    'conv7a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[1]])),
+    'conv8a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[2]])),
+    'conv9a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[3]])),
+    'conv10a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[4]])),
+    'conv11a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[5]]))   
+}
 
 # Building the encoder
 def encoder(x):
@@ -77,36 +87,42 @@ def encoder(x):
 
         # Convolutional Layer #1
         conv1a = tf.nn.conv2d(input=X,filter=weights['conv1a'],strides=[1,1,1,1],padding="SAME")
+        conv1a = tf.add(conv1a,biases['conv1a'])
         conv1a = tf.nn.max_pool(conv1a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv1a = tf.nn.leaky_relu(conv1a,alpha=0.01)
         # [1, 64, 64, 96]
 
         # Convolutional Layer #2
         conv2a = tf.nn.conv2d(input=conv1a,filter=weights['conv2a'],strides=[1,1,1,1],padding="SAME")
+        conv2a = tf.add(conv2a,biases['conv2a'])
         conv2a = tf.nn.max_pool(conv2a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv2a = tf.nn.leaky_relu(conv2a,alpha=0.01)
         ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
 
         # Convolutional Layer #3
         conv3a = tf.nn.conv2d(input=conv2a,filter=weights['conv3a'],strides=[1,1,1,1],padding="SAME")
+        conv3a = tf.add(conv3a,biases['conv3a'])
         conv3a = tf.nn.max_pool(conv3a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv3a = tf.nn.leaky_relu(conv3a,alpha=0.01)
         ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
 
         # Convolutional Layer #4
         conv4a = tf.nn.conv2d(input=conv3a,filter=weights['conv4a'],strides=[1,1,1,1],padding="SAME")
+        conv4a = tf.add(conv4a,biases['conv4a'])
         conv4a = tf.nn.max_pool(conv4a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv4a = tf.nn.leaky_relu(conv4a,alpha=0.01)
         ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
 
         # Convolutional Layer #5
         conv5a = tf.nn.conv2d(input=conv4a,filter=weights['conv5a'],strides=[1,1,1,1],padding="SAME")
+        conv5a = tf.add(conv5a,biases['conv5a'])
         conv5a = tf.nn.max_pool(conv5a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv5a = tf.nn.leaky_relu(conv5a,alpha=0.01)
         ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
 
         # Convolutional Layer #6
         conv6a = tf.nn.conv2d(input=conv5a,filter=weights['conv6a'],strides=[1,1,1,1],padding="SAME")
+        conv6a = tf.add(conv6a,biases['conv6a'])
         conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
         ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
@@ -118,6 +134,7 @@ def encoder(x):
 
         # FC Layer
         fc7 = tf.multiply(flat7,weights['fc7'])
+        fc7 = tf.add(fc7,biases['fc7'])
         ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
         # [N,1024]
 
@@ -138,20 +155,25 @@ def decoder(x):
 
         unpool7 = unpool(ff)
         conv7a = tf.nn.conv3d(unpool7,weights['conv7a'],strides=[1,1,1,1,1],padding="SAME")
+        conv7a = tf.add(conv7a,biases['conv7a'])
         conv7a = tf.nn.leaky_relu(conv7a,alpha=0.01)
 
         unpool8 = unpool(conv7a)
         conv8a = tf.nn.conv3d(unpool8,weights['conv8a'],strides=[1,1,1,1,1],padding="SAME")
+        conv8a = tf.add(conv8a,biases['conv8a'])
         conv8a = tf.nn.leaky_relu(conv8a,alpha=0.01)   
 
         unpool9 = unpool(conv8a)
         conv9a = tf.nn.conv3d(unpool9,weights['conv9a'],strides=[1,1,1,1,1],padding="SAME")
+        conv9a = tf.add(conv9a,biases['conv9a'])
         conv9a = tf.nn.leaky_relu(conv9a,alpha=0.01)
 
         conv10a = tf.nn.conv3d(conv9a,weights['conv10a'],strides=[1,1,1,1,1],padding="SAME")
+        conv10a = tf.add(conv10a,biases['conv10a'])
         conv10a = tf.nn.leaky_relu(conv10a,alpha=0.01)  
 
         conv11a = tf.nn.conv3d(conv10a,weights['conv11a'],strides=[1,1,1,1,1],padding="SAME")
+        conv11a = tf.add(conv11a,biases['conv11a'])
         ''' (32, 32, 32, 1, 2) '''
 
     return conv11a
@@ -210,6 +232,7 @@ with tf.Session() as sess:
 
             for image in x_train[image_hash]:
                 ims.append(image)
+                break # Take 1 pic
 
             ims = tf.convert_to_tensor(ims)
             ims = tf.reshape(ims,[-1,127,127,3])
@@ -226,5 +249,23 @@ with tf.Session() as sess:
 
             # Run optimization op (backprop) and cost op (to get loss value)
             _, l = sess.run([optimizer, loss], feed_dict={X: ims, Y: batch_voxel})
+
+            if(i%2==0):
+                print("Creating prediction objects.")
+                pred = sess.run([y_pred], feed_dict={X: ims, Y: batch_voxel})
+                pred = np.array(pred)
+                pred = pred[0,:,:,:,:,:]
+                pred = tf.convert_to_tensor(pred)
+                exp_x = tf.exp(pred)
+                sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
+                sum_exp_x = sum_exp_x.eval()
+                pred = pred.eval()
+                pred_name = "test_pred1_"+str(i)+".obj"
+                pred_name2 = "test_pred2_exp_"+str(i)+".obj"
+                pred_name3 = "test_pred3_"+str(i)+".obj"
+                voxel.voxel2obj(pred_name,pred[:,:,:,0,0])
+                voxel.voxel2obj(pred_name3,pred[:,:,:,0,1])
+                voxel.voxel2obj(pred_name2,sum_exp_x[:,:,:,0,0])
+
             # Display logs per step
             print('Step %i: Loss: %f' % (i, l))
