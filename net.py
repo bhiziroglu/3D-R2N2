@@ -16,7 +16,8 @@ NUM_OF_IMAGES = 24
 def initialize_placeholders():
     with tf.name_scope("Placeholders"):
         X = tf.placeholder(tf.float32, shape=[NUM_OF_IMAGES, 127, 127, 3],name = "X")
-        Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 2],name = "Y")
+        #Y = tf.placeholder(tf.float32, shape=[32, 32, 32, 1, 2],name = "Y")
+        Y = tf.placeholder(tf.float32, shape=[24,1024],name = "Y")
     return X,Y
 
 X,Y = initialize_placeholders()
@@ -50,17 +51,71 @@ decoder_kernel_shapes = [
 
 with tf.name_scope("encoder_gru_weights"):
     w = [tf.get_variable(
-        "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4444), trainable=True) 
+        "w"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=3), trainable=True) 
         for _,kernel in enumerate(encoder_gru_kernel_shapes)]
     for w_ in w:
         tf.summary.histogram(w_.name, w_)
 
 with tf.name_scope("decoder_weights"):
     w_decoder = [tf.get_variable(
-        "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=4321), trainable=True) 
+        "w2_"+str(_), shape=kernel, initializer = tf.glorot_normal_initializer(seed=5), trainable=True) 
         for _,kernel in enumerate(decoder_kernel_shapes)]
     for w_ in w_decoder:
         tf.summary.histogram(w_.name, w_)
+
+def try_encoder():
+    
+    with tf.name_scope("Encoder"):
+        
+        # Convolutional Layer #1
+        conv1a = tf.nn.conv2d(input=X,filter=w[0],strides=[1,1,1,1],padding="SAME")
+        conv1a = tf.nn.max_pool(conv1a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv1a = tf.nn.leaky_relu(conv1a,alpha=0.01)
+        # [1, 64, 64, 96]
+
+        # Convolutional Layer #2
+        conv2a = tf.nn.conv2d(input=conv1a,filter=w[1],strides=[1,1,1,1],padding="SAME")
+        conv2a = tf.nn.max_pool(conv2a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv2a = tf.nn.leaky_relu(conv2a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
+
+        # Convolutional Layer #3
+        conv3a = tf.nn.conv2d(input=conv2a,filter=w[2],strides=[1,1,1,1],padding="SAME")
+        conv3a = tf.nn.max_pool(conv3a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv3a = tf.nn.leaky_relu(conv3a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
+
+        # Convolutional Layer #4
+        conv4a = tf.nn.conv2d(input=conv3a,filter=w[3],strides=[1,1,1,1],padding="SAME")
+        conv4a = tf.nn.max_pool(conv4a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv4a = tf.nn.leaky_relu(conv4a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
+    
+        # Convolutional Layer #5
+        conv5a = tf.nn.conv2d(input=conv4a,filter=w[4],strides=[1,1,1,1],padding="SAME")
+        conv5a = tf.nn.max_pool(conv5a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv5a = tf.nn.leaky_relu(conv5a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
+    
+        # Convolutional Layer #6
+        conv6a = tf.nn.conv2d(input=conv5a,filter=w[5],strides=[1,1,1,1],padding="SAME")
+        conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+        conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
+        ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
+        
+        # Flatten Layer
+        flat7 = tf.reshape(conv6a,[conv6a.shape[0],-1])
+        ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
+
+        # FC Layer
+        fc7 = tf.multiply(flat7,w[6])
+        ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
+        # [N,1024]
+
+
+        loss_ = sample_loss(fc7)
+        return loss_
+
 
 def build_graph():
 
@@ -177,18 +232,16 @@ def build_graph():
     return loss_, pred_
 
 
+def sample_loss(fc):
+    fc = tf.nn.softmax(fc,axis=-1)
+    l = Y - fc
+    return tf.reduce_sum(l)
+
 
 def loss(y,sum_exp_x,yhat):
     return tf.reduce_mean(
         tf.log(tf.nn.softmax(-yhat * y,axis=-1))+tf.log(sum_exp_x)
     )
-
-def loss2(logit,label):
-    logit = logit > 0.4
-    logit = tf.cast(logit,tf.float32)
-    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=Y)
-    loss = tf.reduce_mean(cross_entropy)
-    return loss
 
 def test_predict(pred,ind):
     pred_name = "test_pred_"+str(ind)+".obj"
@@ -204,10 +257,11 @@ def unpool(x): #unpool_3d_zero_filled
     out_size = [sh[0]*2, sh[1] * 2, sh[2] * 2, -1, sh[4]]
     return tf.reshape(out, out_size)
 
-loss_, pred_ = build_graph()
+#loss_, pred_ = build_graph()
+loss_ = try_encoder()
 
 # Optimization
-optimizer = tf.train.AdamOptimizer(1e-4)
+optimizer = tf.train.AdamOptimizer()
 grads_vars = optimizer.compute_gradients(loss_)
 clipped_gradients = []
 for grad,var in grads_vars:
@@ -249,8 +303,9 @@ if __name__=="__main__":
         pbar = tqdm(total=10)
         #while(x_train!=[] and y_train!=[]):
         while(iter<10): # 5000 iterations
+
             for image_hash in x_train.keys():
-                
+
                 iter+=1
 
                 ims = []
@@ -258,19 +313,24 @@ if __name__=="__main__":
                 for image in x_train[image_hash]:
                     ims.append(image)
                 
-                ims = tf.convert_to_tensor(ims)
-                ims = tf.reshape(ims,[-1,127,127,3])
-                ims = ims.eval()
+                #ims = tf.convert_to_tensor(ims)
+                #ims = tf.reshape(ims,[-1,127,127,3])
+                #ims = ims.eval()
                 #ims = np.random.rand(24,127,127,3)
 
-                vox = tf.convert_to_tensor(y_train[image_hash])
-                vox = tf.cast(vox,tf.float32)
-                vox = vox.eval()
-                batch_voxel = np.zeros((32,32,32,1,2), dtype=float)  
-                batch_voxel[:,:,:,0,0]= vox < 1
-                batch_voxel[:,:,:,0,1]= vox
+                #vox = tf.convert_to_tensor(y_train[image_hash])
+                #vox = tf.cast(vox,tf.float32)
+                #vox = vox.eval()
+                #batch_voxel = np.zeros((32,32,32,1,2), dtype=float)  
+                #batch_voxel[:,:,:,0,0]= vox < 1
+                #batch_voxel[:,:,:,0,1]= vox
+                ims = np.random.rand(24,127,127,3)
+                vox = np.ones((24,1024))
+                                
+                sess.run([updates], feed_dict={X: ims, Y: vox})
 
-                l,u,o,s = sess.run([loss_, updates, pred_, summ], feed_dict={X: ims, Y: batch_voxel})
+
+                l,s = sess.run([loss_, summ], feed_dict={X: ims, Y: vox})
 
                 train_writer.add_summary(s, iter)
                 

@@ -55,6 +55,7 @@ def train_data():
                 im = np.array(Image.open('./03211117R/'+item+'/rendering/'+pic))
                 im = tf.random_crop(im,[127,127,3]) # Input images are [137,137,3]. Remove random 10x10 pixel area.
                 tmp_im_array.append(im)
+                
         x_train[item] = tmp_im_array
         tmp_im_array = []
 
