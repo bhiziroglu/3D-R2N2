@@ -350,20 +350,28 @@ with tf.Session() as sess:
             # Run optimization op (backprop) and cost op (to get loss value)
             l, o, _ = sess.run([loss, output, optimizer], feed_dict={G: prev_s, Y: batch_voxel})
 
-
-            if(i%5==0):
+            if(i%1==0):
                 print("Creating prediction objects.")
 
                 exp_x = tf.exp(o) #32, 32, 32, 1 ,2
                 sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) # 32, 32, 32, 1, 1
+                print("SUM EXP")
+                print(sum_exp_x.shape)
 
 
                 pred = exp_x / sum_exp_x
+
+                print("PRED ")
+                print(pred.shape)
+
                 pred = pred.eval()
+
+                print("PRED EVAL")
+                print(pred.shape)
 
                 pred_name = "test_pred_"+str(i)+".obj"
 
-                voxel.voxel2obj(pred_name,pred[:,:,:,0,1])
+                voxel.voxel2obj(pred_name,pred[:,:,:,0,1] > [0.4])
             
 
 
