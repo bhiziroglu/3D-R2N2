@@ -21,14 +21,14 @@ num_hidden_2 = 128 # 2nd layer num features (the latent dim)
 num_input = 784 # MNIST data input (img shape: 28*28)
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
-n_gru_vox = 4   
+n_gru_vox = 4
 n_fc_filters = [1024]
 NUM_OF_IMAGES = 24
 
 # tf Graph input (only pictures)
 X = tf.placeholder(tf.float32, shape=[None, 127, 127, 3],name = "X")
 Y = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "Y")
-    
+
 
 initializer = tf.glorot_normal_initializer()
 
@@ -49,7 +49,7 @@ weights = {
     'conv9a': tf.Variable(initializer([3,3,3,n_deconvfilter[2],n_deconvfilter[3]])),
     'conv10a': tf.Variable(initializer([3,3,3,n_deconvfilter[3],n_deconvfilter[4]])),
     'conv11a': tf.Variable(initializer([3,3,3,n_deconvfilter[4],n_deconvfilter[5]])),
-    
+
 }
 
 def unpool(x): #unpool_3d_zero_filled
@@ -77,7 +77,7 @@ biases = {
     'conv8a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[2]])),
     'conv9a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[3]])),
     'conv10a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[4]])),
-    'conv11a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[5]]))   
+    'conv11a': tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[5]]))
 }
 
 # Building the encoder
@@ -126,7 +126,7 @@ def encoder(x):
         conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
         ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
-        
+
         # Flatten Layer
         #flat7 = tf.reshape(conv6a,[conv6a.shape[0],-1])
         flat7 = tf.layers.flatten(conv6a)
@@ -143,7 +143,7 @@ def encoder(x):
 
 # Building the decoder
 def decoder(x):
-    
+
 
     with tf.name_scope("Decoder"):
 
@@ -161,7 +161,7 @@ def decoder(x):
         unpool8 = unpool(conv7a)
         conv8a = tf.nn.conv3d(unpool8,weights['conv8a'],strides=[1,1,1,1,1],padding="SAME")
         conv8a = tf.add(conv8a,biases['conv8a'])
-        conv8a = tf.nn.leaky_relu(conv8a,alpha=0.01)   
+        conv8a = tf.nn.leaky_relu(conv8a,alpha=0.01)
 
         unpool9 = unpool(conv8a)
         conv9a = tf.nn.conv3d(unpool9,weights['conv9a'],strides=[1,1,1,1,1],padding="SAME")
@@ -170,7 +170,7 @@ def decoder(x):
 
         conv10a = tf.nn.conv3d(conv9a,weights['conv10a'],strides=[1,1,1,1,1],padding="SAME")
         conv10a = tf.add(conv10a,biases['conv10a'])
-        conv10a = tf.nn.leaky_relu(conv10a,alpha=0.01)  
+        conv10a = tf.nn.leaky_relu(conv10a,alpha=0.01)
 
         conv11a = tf.nn.conv3d(conv10a,weights['conv11a'],strides=[1,1,1,1,1],padding="SAME")
         conv11a = tf.add(conv11a,biases['conv11a'])
@@ -204,7 +204,7 @@ init = tf.global_variables_initializer()
 with tf.Session() as sess:
 
     #sess = tf_debug.TensorBoardDebugWrapperSession(sess, "Berkan-MacBook-Pro.local:4334")
-        
+
     # Run the initializer
     sess.run(init)
 
@@ -213,50 +213,51 @@ with tf.Session() as sess:
 
     x_train = dataset.train_data()
     y_train = dataset.train_labels()
-            
+
     i = 0
 
 
 
-        
-    
-    for image_hash in x_train.keys():
-        
-        i+=1
-        ims = []
+    while(i<num_steps):
 
-        for image in x_train[image_hash]:
-            ims.append(image)
-            break
+        for image_hash in x_train.keys():
 
-        ims = tf.convert_to_tensor(ims)
-        ims = tf.reshape(ims,[-1,127,127,3])
-        ims = ims.eval()
-        
+            i+=1
+            ims = []
+            for image in x_train[image_hash]:
+                ims.append(image)
+                break
 
-        vox = tf.convert_to_tensor(y_train[image_hash])
-        vox = tf.cast(vox,tf.float32)
-        vox = vox.eval()
+            ims = tf.convert_to_tensor(ims)
+            ims = tf.reshape(ims,[-1,127,127,3])
+            ims = ims.eval()
 
-        batch_voxel = np.zeros((32,32,32,1,2), dtype=float)  
-        batch_voxel[:,:,:,0,0]= vox < 1
-        batch_voxel[:,:,:,0,1]= vox
 
-        # Run optimization op (backprop) and cost op (to get loss value)
-        _, l = sess.run([optimizer, loss], feed_dict={X: ims, Y: batch_voxel})
+            vox = tf.convert_to_tensor(y_train[image_hash])
+            vox = tf.cast(vox,tf.float32)
+            vox = vox.eval()
 
-        if(i%2==0):
-            print("Creating prediction objects.")
-            pred = sess.run([y_pred], feed_dict={X: ims, Y: batch_voxel})
-            pred = np.array(pred)
-            pred = pred[0,:,:,:,:,:]
-            pred = tf.convert_to_tensor(pred)
-            exp_x = tf.exp(pred)
-            sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
-            pred = exp_x / sum_exp_x
-            pred = pred.eval()
-            pred_name = "test_pred_"+str(i)+".obj"
-            voxel.voxel2obj(pred_name,pred[:,:,:,0,0])
+            batch_voxel = np.zeros((32,32,32,1,2), dtype=float)
+            batch_voxel[:,:,:,0,0]= vox < 1
+            batch_voxel[:,:,:,0,1]= vox
 
-        # Display logs per step
-        print('Step %i: Loss: %f' % (i, l))
+            # Run optimization op (backprop) and cost op (to get loss value)
+            _, l = sess.run([optimizer, loss], feed_dict={X: ims, Y: batch_voxel})
+
+            if(i%2==0):
+                print("Creating prediction objects.")
+                pred = sess.run([y_pred], feed_dict={X: ims, Y: batch_voxel})
+                pred = np.array(pred)
+                pred = tf.convert_to_tensor(pred[0,:,:,:,:,:])
+
+                exp_x = tf.exp(pred)
+                sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True)
+
+                pred = exp_x / sum_exp_x
+                pred = pred.eval()
+
+                pred_name = "test_pred_"+str(i)+".obj"
+                voxel.voxel2obj(pred_name,pred[:,:,:,0,0])
+
+            # Display logs per step
+            print('Step %i: Loss: %f' % (i, l))
