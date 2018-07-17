@@ -92,68 +92,6 @@ def unpool(x): #unpool_3d_zero_filled
     return tf.reshape(out, out_size)
 
 
-
-# Building the encoder
-def encoder(x):
-
-    with tf.name_scope("Encoder"):
-
-        # Convolutional Layer #1
-        conv1a = tf.nn.conv2d(input=X,filter=weights['conv1a'],strides=[1,1,1,1],padding="SAME")
-        conv1a = tf.add(conv1a,biases['conv1a'])
-        conv1a = tf.nn.max_pool(conv1a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv1a = tf.nn.leaky_relu(conv1a,alpha=0.01)
-        # [1, 64, 64, 96]
-
-        # Convolutional Layer #2
-        conv2a = tf.nn.conv2d(input=conv1a,filter=weights['conv2a'],strides=[1,1,1,1],padding="SAME")
-        conv2a = tf.add(conv2a,biases['conv2a'])
-        conv2a = tf.nn.max_pool(conv2a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv2a = tf.nn.leaky_relu(conv2a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
-
-        # Convolutional Layer #3
-        conv3a = tf.nn.conv2d(input=conv2a,filter=weights['conv3a'],strides=[1,1,1,1],padding="SAME")
-        conv3a = tf.add(conv3a,biases['conv3a'])
-        conv3a = tf.nn.max_pool(conv3a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv3a = tf.nn.leaky_relu(conv3a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
-
-        # Convolutional Layer #4
-        conv4a = tf.nn.conv2d(input=conv3a,filter=weights['conv4a'],strides=[1,1,1,1],padding="SAME")
-        conv4a = tf.add(conv4a,biases['conv4a'])
-        conv4a = tf.nn.max_pool(conv4a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv4a = tf.nn.leaky_relu(conv4a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
-
-        # Convolutional Layer #5
-        conv5a = tf.nn.conv2d(input=conv4a,filter=weights['conv5a'],strides=[1,1,1,1],padding="SAME")
-        conv5a = tf.add(conv5a,biases['conv5a'])
-        conv5a = tf.nn.max_pool(conv5a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv5a = tf.nn.leaky_relu(conv5a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
-
-        # Convolutional Layer #6
-        conv6a = tf.nn.conv2d(input=conv5a,filter=weights['conv6a'],strides=[1,1,1,1],padding="SAME")
-        conv6a = tf.add(conv6a,biases['conv6a'])
-        conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
-
-        # Flatten Layer
-        #flat7 = tf.reshape(conv6a,[conv6a.shape[0],-1])
-        flat7 = tf.layers.flatten(conv6a)
-        ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
-
-        # FC Layer
-        fc7 = tf.multiply(flat7,weights['fc7'])
-        fc7 = tf.add(fc7,biases['fc7'])
-        ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
-        # [N,1024]
-
-    return fc7
-
-
 def gru():
 
     with tf.name_scope("Encoder"):
@@ -326,7 +264,7 @@ output, loss = decoder()
 # Define loss and optimizer, minimize the squared error
 #loss = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
 
-optimizer = tf.train.AdamOptimizer(1e-3).minimize(loss)
+optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
