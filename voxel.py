@@ -4,7 +4,7 @@ import numpy as np
 def voxel2mesh(voxels, surface_view):
     cube_verts = [[0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0],
                   [1, 1, 1]]  # 8 points
-
+    #print("VOXEL IN 2 MESH")
     cube_faces = [[0, 1, 2], [1, 3, 2], [2, 3, 6], [3, 7, 6], [0, 2, 6], [0, 6, 4], [0, 5, 1],
                   [0, 4, 5], [6, 7, 5], [6, 5, 4], [1, 7, 3], [1, 5, 7]]  # 12 face
 
