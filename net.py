@@ -207,40 +207,6 @@ def decoder():
         conv11a = tf.add(conv11a,biases['conv11a'])
         ''' (32, 32, 32, 1, 2) '''
 
-
-
-        #tmp = np.asarray(conv11a)
-        #pred_pos = conv11a[:,:,:,0,1] #Prob of voxel
-        #pred_pos = tf.nn.softmax(pred_pos)
-        #pred_pos = tf.convert_to_tensor(pred_pos)
-        #pred_pos = tf.cast(pred_pos, tf.float32)
-
-        #pred_pos_comp = conv11a[:,:,:,0,0] #1-Prob of voxel
-        #pred_pos_comp = tf.convert_to_tensor(pred_pos_comp)
-        #pred_pos_comp = tf.cast(pred_pos_comp,tf.float32)
-        #pred_pos_comp = tf.nn.softmax(pred_pos_comp)
-
-
-        #tmp = Y
-        #ground_truth = tmp[:,:,:,0,1] #Prob of ground truth
-        #ground_truth_comp = tmp[:,:,:,0,0] #1-Prob of ground truth
-
-        #loss = tf.reduce_mean(
-        #    ground_truth * tf.log(pred_pos) +
-        #    ground_truth_comp * tf.log(pred_pos_comp)
-        #)
-
-
-
-        #loss = tf.reduce_mean(
-        #    tf.sqrt(conv11a-Y)
-        #)
-
-
-        #y_ones = tf.ones_like(Y)
-
-        #y_gold = tf.subtract(y_ones,Y)
-
         exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
         sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
 
@@ -256,15 +222,8 @@ def decoder():
 gru_op = gru()
 output, loss = decoder()
 
-# Prediction
-#y_pred = D
-# Targets (Labels) are the input data.
-#y_true = Y
-
-# Define loss and optimizer, minimize the squared error
-#loss = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
-
 optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
+#optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(loss)
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -296,14 +255,13 @@ with tf.Session() as sess:
 
             i+=1
 
-            #prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
-
             images = x_train[image_hash]
             shuffle(images) #Shuffle views
             for image in images:
-
-                ims = tf.convert_to_tensor(image)
-                ims = tf.reshape(ims,[-1,127,127,3])
+                #ims = tf.convert_to_tensor(image)
+                #ims = tf.reshape(ims,[-1,127,127,3])
+                #ims = ims.eval()
+                ims = tf.ones([1,127,127,3])
                 ims = ims.eval()
 
                 prev_s = sess.run([gru_op], feed_dict={X: ims, p_H: prev_state})
@@ -313,13 +271,15 @@ with tf.Session() as sess:
 
 
             vox = tf.convert_to_tensor(y_train[image_hash])
-            vox = tf.cast(vox,tf.int64)
+            vox = tf.cast(vox,tf.float64)
+            print("XDXD KLKL XDXD")
+            print(sess.run(tf.reduce_mean(vox)))
             vox = vox.eval()
 
-            batch_voxel = np.zeros((32,32,32,1,2), dtype=int)
+            batch_voxel = np.ones((32,32,32,1,2), dtype=int)
 
-            batch_voxel[:,:,:,0,1]= vox
-            batch_voxel[:,:,:,0,0]= vox < 1
+            batch_voxel[:,:,:,0,1] = vox
+            batch_voxel[:,:,:,0,0] = (tf.ones_like(vox) - vox).eval()
 
             #decoder_out, loss = sess.run([decoder_op], feed_dict={G: prev_state, Y: batch_voxel})
 
@@ -328,7 +288,7 @@ with tf.Session() as sess:
 
             #train_writer.add_summary(summary, i)
 
-            if(i%5==0):
+            if(i%1==0):
 
                 print("Creating prediction objects.")
 
@@ -337,23 +297,6 @@ with tf.Session() as sess:
 
                 pred = exp_x / sum_exp_x
 
-                #pred = 1 / (1 + tf.exp(tf.ones_like(o)-1))
-
-                '''
-                c = pred[:, :, :, 0, 1] > [0.4]
-                c2 = pred[:, :, :, 0, 0] > [0.4]
-
-                c = tf.cast(c, tf.float32)
-                d = tf.reduce_mean(c)
-                print("XDXD C1")
-                print(sess.run(d))
-
-                c2 = tf.cast(c2,tf.float32)
-                d2 = tf.reduce_mean(c2)
-
-                print("XDXD C2")
-                print(sess.run(d2))
-                '''
                 pred = pred.eval()
 
 
@@ -361,20 +304,8 @@ with tf.Session() as sess:
                 pred_name2 = "test_pred_"+str(i)+"_XD.obj"
 
 
-                #c = pred[:,:,:,0,1] > [0.4]
-                #c = tf.cast(c,tf.float32)
-                #c = tf.convert_to_tensor(c,tf.float32)
-
-
-                #b = tf.Print(c, [c], ran"PRINTING OUTPUT")
-                #for i in range(32):
-                #    print(sess.run(pred[i,:,:,0,1]>[0.4]))
-                #    print()
-
-
-
-                voxel.voxel2obj(pred_name2,pred[:,:,:,0,0] > [0.4])
-                voxel.voxel2obj(pred_name,pred[:,:,:,0,1] > [0.4])
+                voxel.voxel2obj(pred_name2,pred[:,:,:,0,1])
+                voxel.voxel2obj(pred_name,pred[:,:,:,0,0])
             
 
 
