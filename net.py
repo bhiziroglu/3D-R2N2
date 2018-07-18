@@ -7,6 +7,7 @@ import dataset
 from tensorflow.python import debug as tf_debug
 import voxel
 from random import shuffle
+import matplotlib.pyplot as plt
 
 # Training Parameters
 learning_rate = 0.01
@@ -17,9 +18,6 @@ display_step = 1000
 examples_to_show = 10
 
 # Network Parameters
-num_hidden_1 = 256 # 1st layer num features
-num_hidden_2 = 128 # 2nd layer num features (the latent dim)
-num_input = 784 # MNIST data input (img shape: 28*28)
 n_convfilter = [96, 128, 256, 256, 256, 256]
 n_deconvfilter = [128, 128, 128, 64, 32, 2]
 n_gru_vox = 4
@@ -33,7 +31,7 @@ Y = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "Y")
 G = tf.placeholder(tf.float32, shape=[4,4,4,1,128],name = "GRU_OUT")
 #D = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "DECODER_OUT")
 
-initializer = tf.glorot_normal_initializer(seed=123)
+initializer = tf.glorot_normal_initializer(seed=4444)
 
 weights = {
     #Encoder Part
@@ -164,7 +162,7 @@ def gru():
 
         update_gate = tf.sigmoid(t_x_s_update)
 
-        complement_update_gate = 1 - update_gate
+        complement_update_gate = tf.ones_like(update_gate) - update_gate
         reset_gate = tf.sigmoid(t_x_s_reset)
 
         rs = reset_gate * prev_hidden
@@ -207,14 +205,34 @@ def decoder():
         conv11a = tf.add(conv11a,biases['conv11a'])
         ''' (32, 32, 32, 1, 2) '''
 
-        exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
-        sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
+        #exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
+        #sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
 
-        loss = tf.reduce_mean(
-            tf.reduce_sum(-Y * conv11a, axis=4, keepdims=True) +
-            tf.log(sum_exp_x)
+        #conv11a = tf.sqrt(tf.reduce_sum(tf.square(conv11a), axis=4, keepdims=True))
+        #loss = tf.reduce_mean(
+        #    tf.reduce_sum(-Y * conv11a, axis=4, keepdims=True) +
+        #   tf.log(sum_exp_x)
+        #)
+        #conv11a = conv11a / tf.reduce_sum(conv11a)
+
+        #loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=Y,logits=conv11a)
+        #loss = tf.reduce_mean(loss)
+
+        logits = tf.squeeze(conv11a)
+
+        outputs = tf.contrib.layers.softmax(logits)
+
+        label_placeholder = tf.squeeze(Y)
+
+        loss = tf.nn.weighted_cross_entropy_with_logits(
+            targets=label_placeholder,
+            logits=logits,
+            pos_weight=10,
+            name=None
         )
 
+        loss = tf.layers.flatten(loss)
+        loss = tf.reduce_mean(loss)
 
     return conv11a, loss
 
@@ -222,7 +240,7 @@ def decoder():
 gru_op = gru()
 output, loss = decoder()
 
-optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
+optimizer = tf.train.AdamOptimizer(5e-5).minimize(loss)
 #optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(loss)
 
 # Initialize the variables (i.e. assign their default value)
@@ -246,7 +264,6 @@ with tf.Session() as sess:
 
     i = 0
 
-    prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
 
     while(i<num_steps):
 
@@ -254,15 +271,17 @@ with tf.Session() as sess:
         for image_hash in x_train.keys():
 
             i+=1
+            prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
 
             images = x_train[image_hash]
             shuffle(images) #Shuffle views
             for image in images:
-                #ims = tf.convert_to_tensor(image)
-                #ims = tf.reshape(ims,[-1,127,127,3])
-                #ims = ims.eval()
-                ims = tf.ones([1,127,127,3])
+
+                ims = tf.convert_to_tensor(image)
+                ims = tf.reshape(ims,[-1,127,127,3])
                 ims = ims.eval()
+                #ims = tf.ones([1,127,127,3])
+                #ims = ims.eval()
 
                 prev_s = sess.run([gru_op], feed_dict={X: ims, p_H: prev_state})
                 prev_s = np.array(prev_s)
@@ -272,11 +291,12 @@ with tf.Session() as sess:
 
             vox = tf.convert_to_tensor(y_train[image_hash])
             vox = tf.cast(vox,tf.float64)
-            print("XDXD KLKL XDXD")
-            print(sess.run(tf.reduce_mean(vox)))
+
+            #print("HOW POPULATED IS THE REAL OBJECT ?")
+            #print(sess.run(tf.reduce_mean(vox)))
             vox = vox.eval()
 
-            batch_voxel = np.ones((32,32,32,1,2), dtype=int)
+            batch_voxel = np.ones((32,32,32,1,2), dtype=float)
 
             batch_voxel[:,:,:,0,1] = vox
             batch_voxel[:,:,:,0,0] = (tf.ones_like(vox) - vox).eval()
@@ -292,20 +312,21 @@ with tf.Session() as sess:
 
                 print("Creating prediction objects.")
 
-                exp_x = tf.exp(o) #32, 32, 32, 1 ,2
-                sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) # 32, 32, 32, 1, 1
+                #exp_x = tf.exp(o) #32, 32, 32, 1 ,2
+                #sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) # 32, 32, 32, 1, 1
 
-                pred = exp_x / sum_exp_x
-
-                pred = pred.eval()
+                #pred = exp_x / sum_exp_x
+                o = tf.convert_to_tensor(o)
+                outputs = tf.contrib.layers.softmax(o)
+                pred = tf.argmax(outputs, axis=4).eval().astype(np.float32)
 
 
                 pred_name = "test_pred_"+str(i)+".obj"
                 pred_name2 = "test_pred_"+str(i)+"_XD.obj"
 
 
-                voxel.voxel2obj(pred_name2,pred[:,:,:,0,1])
-                voxel.voxel2obj(pred_name,pred[:,:,:,0,0])
+                #voxel.voxel2obj(pred_name2,pred[:,:,:,0,1])
+                voxel.voxel2obj(pred_name,pred[:,:,:,0])
             
 
 
