@@ -10,9 +10,8 @@ from random import shuffle
 import matplotlib.pyplot as plt
 
 # Training Parameters
-learning_rate = 0.01
 num_steps = 1000
-batch_size = 128
+batch_size = 2
 
 display_step = 1000
 examples_to_show = 10
@@ -27,8 +26,8 @@ NUM_OF_IMAGES = 24
 # tf Graph input (only pictures)
 X = tf.placeholder(tf.float32, shape=[None, 127, 127, 3],name = "X")
 p_H = tf.placeholder(tf.float32, [n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]], name="p_H")
-Y = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "Y")
-G = tf.placeholder(tf.float32, shape=[4,4,4,1,128],name = "GRU_OUT")
+Y = tf.placeholder(tf.float32, shape=[32,32,32,batch_size,2],name = "Y")
+G = tf.placeholder(tf.float32, shape=[4,4,4,batch_size,128],name = "GRU_OUT")
 #D = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "DECODER_OUT")
 
 initializer = tf.glorot_normal_initializer(seed=4444)
@@ -205,19 +204,24 @@ def decoder():
         conv11a = tf.add(conv11a,biases['conv11a'])
         ''' (32, 32, 32, 1, 2) '''
 
-        #exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
-        #sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
 
-        #conv11a = tf.sqrt(tf.reduce_sum(tf.square(conv11a), axis=4, keepdims=True))
-        #loss = tf.reduce_mean(
-        #    tf.reduce_sum(-Y * conv11a, axis=4, keepdims=True) +
-        #   tf.log(sum_exp_x)
-        #)
-        #conv11a = conv11a / tf.reduce_sum(conv11a)
+        loss_tmp = 0
 
-        #loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=Y,logits=conv11a)
-        #loss = tf.reduce_mean(loss)
+        exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
+        sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
 
+        for j in range(1,batch_size+1):
+
+            tmp = tf.reduce_mean(
+                tf.reduce_sum(-Y[:,:,:,j-1:j,:] * conv11a[:,:,:,j-1:j,:], axis=4, keepdims=True) +
+               tf.log(sum_exp_x[:,:,:,j-1:j,:])
+            )
+
+            loss_tmp += tmp
+
+        loss = loss_tmp / batch_size
+
+        '''
         logits = tf.squeeze(conv11a)
 
         outputs = tf.contrib.layers.softmax(logits)
@@ -233,6 +237,7 @@ def decoder():
 
         loss = tf.layers.flatten(loss)
         loss = tf.reduce_mean(loss)
+        '''
 
     return conv11a, loss
 
@@ -262,19 +267,25 @@ with tf.Session() as sess:
     x_train = dataset.train_data()
     y_train = dataset.train_labels()
 
-    i = 0
 
 
-    while(i<num_steps):
 
+    no = 0
+    while(no<num_steps):
+        no += 1
+        i = 1
 
+        x_test = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, batch_size, n_deconvfilter[0]])
+        y_test = np.ones((32, 32, 32, batch_size, 2), dtype=float)
+
+        print("Batch No: " + str(no))
         for image_hash in x_train.keys():
 
-            i+=1
             prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
 
             images = x_train[image_hash]
             shuffle(images) #Shuffle views
+
             for image in images:
 
                 ims = tf.convert_to_tensor(image)
@@ -289,47 +300,22 @@ with tf.Session() as sess:
                 prev_state = prev_s
 
 
+            x_test[:, :, :, i-1:i, :] = prev_state
+
             vox = tf.convert_to_tensor(y_train[image_hash])
             vox = tf.cast(vox,tf.float64)
 
-            #print("HOW POPULATED IS THE REAL OBJECT ?")
-            #print(sess.run(tf.reduce_mean(vox)))
             vox = vox.eval()
 
-            batch_voxel = np.ones((32,32,32,1,2), dtype=float)
+            y_test[:, :, :, i-1, 1] = vox
+            y_test[:, :, :, i-1, 0] = (tf.ones_like(vox) - vox).eval()
 
-            batch_voxel[:,:,:,0,1] = vox
-            batch_voxel[:,:,:,0,0] = (tf.ones_like(vox) - vox).eval()
+            i += 1
 
-            #decoder_out, loss = sess.run([decoder_op], feed_dict={G: prev_state, Y: batch_voxel})
-
-            # Run optimization op (backprop) and cost op (to get loss value)
-            l, o, _ = sess.run([loss, output, optimizer], feed_dict={G: prev_state, Y: batch_voxel})
-
-            #train_writer.add_summary(summary, i)
-
-            if(i%1==0):
-
-                print("Creating prediction objects.")
-
-                #exp_x = tf.exp(o) #32, 32, 32, 1 ,2
-                #sum_exp_x = tf.reduce_sum(exp_x,axis=4,keepdims=True) # 32, 32, 32, 1, 1
-
-                #pred = exp_x / sum_exp_x
-                o = tf.convert_to_tensor(o)
-                outputs = tf.contrib.layers.softmax(o)
-                pred = tf.argmax(outputs, axis=4).eval().astype(np.float32)
-
-
-                pred_name = "test_pred_"+str(i)+".obj"
-                pred_name2 = "test_pred_"+str(i)+"_XD.obj"
-
-
-                #voxel.voxel2obj(pred_name2,pred[:,:,:,0,1])
-                voxel.voxel2obj(pred_name,pred[:,:,:,0])
-            
-
-
-
-            # Display logs per step
-            print('Step %i: Loss: %f' % (i, l))
+        # Run optimization op (backprop) and cost op (to get loss value)
+        l, o, _ = sess.run([loss, output, optimizer], feed_dict={G: x_test, Y: y_test})
+        print("Loss: " + str(l))
+        o = tf.convert_to_tensor(o)
+        outputs = tf.contrib.layers.softmax(o)
+        pred = tf.argmax(outputs, axis=4).eval().astype(np.float32)
+        voxel.voxel2obj("test_pred_" + str(no) + ".obj", pred[:, :, :, 0])
