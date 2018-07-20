@@ -57,24 +57,24 @@ weights = {
 
 biases = {
     #Encoder Part
-    'conv1a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[0]])),
-    'conv2a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[1]])),
-    'conv3a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[2]])),
-    'conv4a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[3]])),
-    'conv5a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[4]])),
-    'conv6a':       tf.Variable(tf.random_normal([1,1,1,n_convfilter[5]])),
-    'fc7':          tf.Variable(tf.random_normal([n_fc_filters[0]])),
+    'conv1a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[0]])),
+    'conv2a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[1]])),
+    'conv3a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[2]])),
+    'conv4a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[3]])),
+    'conv5a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[4]])),
+    'conv6a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[5]])),
+    'fc7':          tf.Variable(tf.zeros([n_fc_filters[0]])),
     #Gru Part
-    'w_update':     tf.Variable(tf.random_normal([8192])),
-    'update_gate':  tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[0]])),
-    'reset_gate':   tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[0]])),
-    'tanh_reset':   tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[0]])),
+    'w_update':     tf.Variable(tf.zeros([8192])),
+    'update_gate':  tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
+    'reset_gate':   tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
+    'tanh_reset':   tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
     #Decoder Part
-    'conv7a':       tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[1]])),
-    'conv8a':       tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[2]])),
-    'conv9a':       tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[3]])),
-    'conv10a':      tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[4]])),
-    'conv11a':      tf.Variable(tf.random_normal([1,1,1,n_deconvfilter[5]]))
+    'conv7a':       tf.Variable(tf.zeros([1,1,1,n_deconvfilter[1]])),
+    'conv8a':       tf.Variable(tf.zeros([1,1,1,n_deconvfilter[2]])),
+    'conv9a':       tf.Variable(tf.zeros([1,1,1,n_deconvfilter[3]])),
+    'conv10a':      tf.Variable(tf.zeros([1,1,1,n_deconvfilter[4]])),
+    'conv11a':      tf.Variable(tf.zeros([1,1,1,n_deconvfilter[5]]))
 }
 
 
@@ -132,7 +132,7 @@ def gru():
         conv6a = tf.nn.conv2d(input=conv5a,filter=weights['conv6a'],strides=[1,1,1,1],padding="SAME")
         conv6a = tf.add(conv6a,biases['conv6a'])
         conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
+        #conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
         ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
 
         # Flatten Layer
@@ -141,8 +141,8 @@ def gru():
         ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
 
         # FC Layer
-        fc7 = tf.multiply(flat7,weights['fc7'])
-        fc7 = tf.add(fc7,biases['fc7'])
+        fc7 = tf.layers.dense(flat7,1024,activation=tf.nn.leaky_relu,use_bias=True)
+
         ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
         # [N,1024]
 
@@ -151,7 +151,7 @@ def gru():
 
         prev_hidden = p_H
 
-        fc_layer = tf.matmul(fc7, weights['w_update'])  # [1,1024]x[1024,8192] // FC LAYER FOR UPDATE GATE
+        fc_layer = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
         fc_layer = tf.reshape(fc_layer, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
 
         t_x_s_update = tf.nn.conv3d(prev_hidden, weights['update_gate'], strides=[1, 1, 1, 1, 1], padding="SAME") + fc_layer
@@ -221,32 +221,13 @@ def decoder():
 
         loss = loss_tmp / batch_size
 
-        '''
-        logits = tf.squeeze(conv11a)
-
-        outputs = tf.contrib.layers.softmax(logits)
-
-        label_placeholder = tf.squeeze(Y)
-
-        loss = tf.nn.weighted_cross_entropy_with_logits(
-            targets=label_placeholder,
-            logits=logits,
-            pos_weight=10,
-            name=None
-        )
-
-        loss = tf.layers.flatten(loss)
-        loss = tf.reduce_mean(loss)
-        '''
-
     return conv11a, loss
 
 # Construct model
 gru_op = gru()
 output, loss = decoder()
 
-optimizer = tf.train.AdamOptimizer(5e-5).minimize(loss)
-#optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(loss)
+optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -266,9 +247,6 @@ with tf.Session() as sess:
 
     x_train = dataset.train_data()
     y_train = dataset.train_labels()
-
-
-
 
     no = 0
     while(no<num_steps):
@@ -315,6 +293,7 @@ with tf.Session() as sess:
         # Run optimization op (backprop) and cost op (to get loss value)
         l, o, _ = sess.run([loss, output, optimizer], feed_dict={G: x_test, Y: y_test})
         print("Loss: " + str(l))
+
         o = tf.convert_to_tensor(o)
         outputs = tf.contrib.layers.softmax(o)
         pred = tf.argmax(outputs, axis=4).eval().astype(np.float32)
