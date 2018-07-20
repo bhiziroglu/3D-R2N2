@@ -6,16 +6,14 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
+TEST_DATA = "03001627" #03001627
+MAIN_DATA = "03211117"
 
-BATCH_SIZE = 2
-label_dir = os.listdir('./03211117_labelsR')
-data = os.listdir('./03211117R')
+BATCH_SIZE = 36
+label_dir = os.listdir('./'+TEST_DATA+'_labels')
+data = os.listdir('./'+TEST_DATA+'')
 TOTAL_SIZE = len(data)
 
-def init_dataset():
-    label_dir = os.listdir('./03211117_labelsR')
-    data = os.listdir('./03211117R')
-    TOTAL_SIZE = len(data)
 
 def train_labels():
     
@@ -29,7 +27,7 @@ def train_labels():
         label = label_dir.pop()
         if(label.startswith('.')):
             continue
-        binv = open('./03211117_labelsR/'+label+'/model.binvox','rb')
+        binv = open('./'+TEST_DATA+'_labels/'+label+'/model.binvox','rb')
         binvox_data = binvox_rw.read_as_3d_array(binv).data # binvox_data is 32x32x32
         y_train[label] = np.asarray(binvox_data)
 
@@ -50,9 +48,9 @@ def train_data():
         tmp_im_array = []
         if(item.startswith('.')):
             continue
-        for pic in os.listdir('./03211117R/'+item+'/rendering'):
+        for pic in os.listdir('./'+TEST_DATA+'/'+item+'/rendering'):
             if('.png' in pic): #If current item is a picture, store it
-                im = np.array(Image.open('./03211117R/'+item+'/rendering/'+pic))
+                im = np.array(Image.open('./'+TEST_DATA+'/'+item+'/rendering/'+pic))
                 im = tf.random_crop(im,[127,127,3]) # Input images are [137,137,3]. Remove random 10x10 pixel area.
                 tmp_im_array.append(im)
                 

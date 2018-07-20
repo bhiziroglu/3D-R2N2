@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 # Training Parameters
 num_steps = 1000
-batch_size = 2
+batch_size = 36
 
 display_step = 1000
 examples_to_show = 10
@@ -40,7 +40,7 @@ weights = {
     'conv4a': tf.Variable(initializer([3,3,n_convfilter[2],n_convfilter[3]])),
     'conv5a': tf.Variable(initializer([3,3,n_convfilter[3],n_convfilter[4]])),
     'conv6a': tf.Variable(initializer([3,3,n_convfilter[4],n_convfilter[5]])),
-    'fc7': tf.Variable(initializer([1,n_fc_filters[0]])),
+    #'fc7': tf.Variable(initializer([1,n_fc_filters[0]])),
     #Gru Part
     'w_update': tf.Variable(initializer([1024,8192])), #
     'update_gate': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[0]])),
@@ -87,6 +87,13 @@ def unpool(x): #unpool_3d_zero_filled
     sh = x.get_shape().as_list()
     out_size = [sh[0]*2, sh[1] * 2, sh[2] * 2, -1, sh[4]]
     return tf.reshape(out, out_size)
+
+def berkan_unpool(x):
+    #e=[4,4,4,batch_size,128], -> needs to be [batch_size,4,4,4,128]
+    x = tf.transpose(x,perm=[3,1,2,0,4])
+    x = tf.keras.layers.UpSampling3D(size=[2, 2, 2])(x)
+    x = tf.transpose(x,perm=[3,1,2,0,4])
+    return x
 
 
 def gru():
@@ -180,18 +187,18 @@ def decoder():
 
     with tf.name_scope("Decoder"):
 
-        #x = tf.reshape(x,[4,4,4,1,2])
-        unpool7 = unpool(G)
+
+        unpool7 = berkan_unpool(G)
         conv7a = tf.nn.conv3d(unpool7,weights['conv7a'],strides=[1,1,1,1,1],padding="SAME")
         conv7a = tf.add(conv7a,biases['conv7a'])
         conv7a = tf.nn.leaky_relu(conv7a,alpha=0.01)
 
-        unpool8 = unpool(conv7a)
+        unpool8 = berkan_unpool(conv7a)
         conv8a = tf.nn.conv3d(unpool8,weights['conv8a'],strides=[1,1,1,1,1],padding="SAME")
         conv8a = tf.add(conv8a,biases['conv8a'])
         conv8a = tf.nn.leaky_relu(conv8a,alpha=0.01)
 
-        unpool9 = unpool(conv8a)
+        unpool9 = berkan_unpool(conv8a)
         conv9a = tf.nn.conv3d(unpool9,weights['conv9a'],strides=[1,1,1,1,1],padding="SAME")
         conv9a = tf.add(conv9a,biases['conv9a'])
         conv9a = tf.nn.leaky_relu(conv9a,alpha=0.01)
@@ -227,7 +234,7 @@ def decoder():
 gru_op = gru()
 output, loss = decoder()
 
-optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
+optimizer = tf.train.AdamOptimizer(5e-5).minimize(loss)
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -256,7 +263,7 @@ with tf.Session() as sess:
         x_test = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, batch_size, n_deconvfilter[0]])
         y_test = np.ones((32, 32, 32, batch_size, 2), dtype=float)
 
-        print("Batch No: " + str(no))
+
         for image_hash in x_train.keys():
 
             prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
@@ -292,9 +299,24 @@ with tf.Session() as sess:
 
         # Run optimization op (backprop) and cost op (to get loss value)
         l, o, _ = sess.run([loss, output, optimizer], feed_dict={G: x_test, Y: y_test})
-        print("Loss: " + str(l))
 
+        print("Batch: "+ str(no) + " Loss: " + str(l))
+
+        '''
         o = tf.convert_to_tensor(o)
         outputs = tf.contrib.layers.softmax(o)
         pred = tf.argmax(outputs, axis=4).eval().astype(np.float32)
         voxel.voxel2obj("test_pred_" + str(no) + ".obj", pred[:, :, :, 0])
+        '''
+        exp_x = tf.exp(o)  # 32, 32, 32, 1 ,2
+        sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
+
+        pred = exp_x / sum_exp_x
+
+        pred = pred.eval()
+
+        pred_name = "test_pred_" + str(no) + ".obj"
+        pred_name2 = "test_pred_" + str(no) + "_XD.obj"
+
+        voxel.voxel2obj(pred_name2, pred[:, :, :, 0, 1])
+        voxel.voxel2obj(pred_name, pred[:, :, :, 0, 0])
