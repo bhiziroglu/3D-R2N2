@@ -144,7 +144,7 @@ def gru():
         ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
 
         # FC Layer
-        fc7 = tf.layers.dense(flat7,1024,activation=tf.nn.leaky_relu,use_bias=True)
+        fc7 = tf.layers.dense(flat7,1024,activation=tf.nn.leaky_relu,use_bias=True,kernel_initializer=initializer)
 
         ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
         # [N,1024]
@@ -154,13 +154,13 @@ def gru():
 
         prev_hidden = p_H
 
-        update_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
+        update_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True,kernel_initializer=initializer)
         update_dense = tf.reshape(update_dense, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
 
-        reset_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
+        reset_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True,kernel_initializer=initializer)
         reset_dense = tf.reshape(reset_dense, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
 
-        hidden_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
+        hidden_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True,kernel_initializer=initializer)
         hidden_dense = tf.reshape(hidden_dense, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
 
         t_x_s_update = tf.nn.conv3d(prev_hidden, weights['update_gate'], strides=[1, 1, 1, 1, 1], padding="SAME") + update_dense

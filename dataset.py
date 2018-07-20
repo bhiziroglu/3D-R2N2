@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
-TEST_DATA = "03001627" #03001627
+TEST_DATA = "03001627" #03001627 -> 13556 OBJE, 176228 RESIM TOPLAMDA
 MAIN_DATA = "03211117"
 
 BATCH_SIZE = 2
