@@ -6,12 +6,12 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
-TEST_DATA = "03001627" #03001627 -> 13556 OBJE, 176228 RESIM TOPLAMDA
+TEST_DATA = "03211117" #03001627 -> 13556 OBJE, 176228 RESIM TOPLAMDA
 MAIN_DATA = "03211117"
 
-BATCH_SIZE = 2
-label_dir = os.listdir('./'+TEST_DATA+'_labels')
-data = os.listdir('./'+TEST_DATA+'')
+BATCH_SIZE = 1
+label_dir = os.listdir('./'+TEST_DATA+'_labelsR')
+data = os.listdir('./'+TEST_DATA+'R')
 TOTAL_SIZE = len(data)
 
 
@@ -27,7 +27,7 @@ def train_labels():
         label = label_dir.pop()
         if(label.startswith('.')):
             continue
-        binv = open('./'+TEST_DATA+'_labels/'+label+'/model.binvox','rb')
+        binv = open('./'+TEST_DATA+'_labelsR/'+label+'/model.binvox','rb')
         binvox_data = binvox_rw.read_as_3d_array(binv).data # binvox_data is 32x32x32
         y_train[label] = np.asarray(binvox_data)
 

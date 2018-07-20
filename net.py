@@ -13,7 +13,7 @@ import datetime
 
 # Training Parameters
 num_steps = 1000
-batch_size = 2
+batch_size = 1
 
 display_step = 1000
 examples_to_show = 10
@@ -26,7 +26,7 @@ n_fc_filters = [1024]
 NUM_OF_IMAGES = 24
 
 # tf Graph input (only pictures)
-X = tf.placeholder(tf.float32, shape=[None, 127, 127, 3],name = "X")
+X = tf.placeholder(tf.float32, shape=[1, 127, 127, 3],name = "X")
 p_H = tf.placeholder(tf.float32, [n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]], name="p_H")
 Y = tf.placeholder(tf.float32, shape=[32,32,32,batch_size,2],name = "Y")
 G = tf.placeholder(tf.float32, shape=[4,4,4,batch_size,128],name = "GRU_OUT")
@@ -45,11 +45,9 @@ weights = {
     'conv6a': tf.Variable(initializer([3,3,n_convfilter[4],n_convfilter[5]])),
     #'fc7': tf.Variable(initializer([1,n_fc_filters[0]])),
     #Gru Part
-    'w_update': tf.Variable(initializer([1024,8192])), #
     'update_gate': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[0]])),
     'hidden_gate': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[0]])),
     'reset_gate': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
-    'tanh_reset': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
     #'prev_s': tf.Variable(tf.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])),
     #Decoder Part
     'conv7a': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[1]])),
@@ -67,13 +65,10 @@ biases = {
     'conv4a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[3]])),
     'conv5a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[4]])),
     'conv6a':       tf.Variable(tf.zeros([1,1,1,n_convfilter[5]])),
-    'fc7':          tf.Variable(tf.zeros([n_fc_filters[0]])),
     #Gru Part
-    'w_update':     tf.Variable(tf.zeros([8192])),
     'update_gate':  tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
     'hidden_gate':  tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
     'reset_gate':   tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
-    'tanh_reset':   tf.Variable(tf.zeros([1,1,1,n_deconvfilter[0]])),
     #Decoder Part
     'conv7a':       tf.Variable(tf.zeros([1,1,1,n_deconvfilter[1]])),
     'conv8a':       tf.Variable(tf.zeros([1,1,1,n_deconvfilter[2]])),
@@ -273,7 +268,7 @@ with tf.Session() as sess:
             for image in images:
 
                 ims = tf.convert_to_tensor(image)
-                ims = tf.reshape(ims,[-1,127,127,3])
+                ims = tf.reshape(ims,[1,127,127,3])
                 ims = ims.eval()
                 #ims = tf.ones([1,127,127,3])
                 #ims = ims.eval()
