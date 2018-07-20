@@ -9,7 +9,7 @@ import tensorflow as tf
 TEST_DATA = "03001627" #03001627
 MAIN_DATA = "03211117"
 
-BATCH_SIZE = 36
+BATCH_SIZE = 2
 label_dir = os.listdir('./'+TEST_DATA+'_labels')
 data = os.listdir('./'+TEST_DATA+'')
 TOTAL_SIZE = len(data)
