@@ -25,14 +25,11 @@ n_gru_vox = 4
 n_fc_filters = [1024]
 NUM_OF_IMAGES = 24
 
-# tf Graph input (only pictures)
 X = tf.placeholder(tf.float32, shape=[None, 127, 127, 3],name = "X")
 p_H = tf.placeholder(tf.float32, [n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]], name="p_H")
 Y = tf.placeholder(tf.float32, shape=[32,32,32,batch_size,2],name = "Y")
 G = tf.placeholder(tf.float32, shape=[4,4,4,batch_size,128],name = "GRU_OUT")
-#D = tf.placeholder(tf.float32, shape=[32,32,32,1,2],name = "DECODER_OUT")
 
-#initializer = tf.glorot_normal_initializer(seed=3211)
 initializer = tf.variance_scaling_initializer(scale=2.0)
 
 weights = {
@@ -43,14 +40,14 @@ weights = {
     'conv4a': tf.Variable(initializer([3,3,n_convfilter[2],n_convfilter[3]])),
     'conv5a': tf.Variable(initializer([3,3,n_convfilter[3],n_convfilter[4]])),
     'conv6a': tf.Variable(initializer([3,3,n_convfilter[4],n_convfilter[5]])),
-    #'fc7': tf.Variable(initializer([1,n_fc_filters[0]])),
+
     #Gru Part
     'w_update': tf.Variable(initializer([1024,8192])), #
     'update_gate': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[0]])),
     'hidden_gate': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[0]])),
     'reset_gate': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
     'tanh_reset': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
-    #'prev_s': tf.Variable(tf.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])),
+    
     #Decoder Part
     'conv7a': tf.Variable(initializer([3,3,3,n_deconvfilter[0],n_deconvfilter[1]])),
     'conv8a': tf.Variable(initializer([3,3,3,n_deconvfilter[1],n_deconvfilter[2]])),
@@ -85,7 +82,6 @@ biases = {
 
 
 def unpool(x):
-    #e=[4,4,4,batch_size,128], -> needs to be [batch_size,4,4,4,128]
     x = tf.transpose(x,perm=[3,1,2,0,4])
     x = tf.keras.layers.UpSampling3D(size=[2, 2, 2])(x)
     x = tf.transpose(x,perm=[3,1,2,0,4])
@@ -101,53 +97,42 @@ def gru():
         conv1a = tf.add(conv1a,biases['conv1a'])
         conv1a = tf.nn.max_pool(conv1a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv1a = tf.nn.leaky_relu(conv1a,alpha=0.01)
-        # [1, 64, 64, 96]
 
         # Convolutional Layer #2
         conv2a = tf.nn.conv2d(input=conv1a,filter=weights['conv2a'],strides=[1,1,1,1],padding="SAME")
         conv2a = tf.add(conv2a,biases['conv2a'])
         conv2a = tf.nn.max_pool(conv2a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv2a = tf.nn.leaky_relu(conv2a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 32, 32, 128)   ->>>      Paper result size is (1, 33, 33, 128)'''
-
+        
         # Convolutional Layer #3
         conv3a = tf.nn.conv2d(input=conv2a,filter=weights['conv3a'],strides=[1,1,1,1],padding="SAME")
         conv3a = tf.add(conv3a,biases['conv3a'])
         conv3a = tf.nn.max_pool(conv3a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv3a = tf.nn.leaky_relu(conv3a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 16, 16, 256)   ->>>      Paper result size is (1, 17, 17, 256)'''
+        
 
         # Convolutional Layer #4
         conv4a = tf.nn.conv2d(input=conv3a,filter=weights['conv4a'],strides=[1,1,1,1],padding="SAME")
         conv4a = tf.add(conv4a,biases['conv4a'])
         conv4a = tf.nn.max_pool(conv4a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv4a = tf.nn.leaky_relu(conv4a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
-
+        
         # Convolutional Layer #5
         conv5a = tf.nn.conv2d(input=conv4a,filter=weights['conv5a'],strides=[1,1,1,1],padding="SAME")
         conv5a = tf.add(conv5a,biases['conv5a'])
         conv5a = tf.nn.max_pool(conv5a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv5a = tf.nn.leaky_relu(conv5a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 4, 4, 256)   ->>>      Paper result size is (1, 5, 5, 256)'''
 
         # Convolutional Layer #6
         conv6a = tf.nn.conv2d(input=conv5a,filter=weights['conv6a'],strides=[1,1,1,1],padding="SAME")
         conv6a = tf.add(conv6a,biases['conv6a'])
         conv6a = tf.nn.max_pool(conv6a,ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
-        #conv6a = tf.nn.leaky_relu(conv6a,alpha=0.01)
-        ''' !!!TODO!!!  (1, 2, 2, 256)   ->>>      Paper result size is (1, 3, 3, 256)'''
 
         # Flatten Layer
-        #flat7 = tf.reshape(conv6a,[conv6a.shape[0],-1])
         flat7 = tf.layers.flatten(conv6a)
-        ''' !!!TODO!!!  (1, 1024)   ->>>      Paper result size is (1, 2304)'''
-
+        
         # FC Layer
         fc7 = tf.layers.dense(flat7,1024,activation=tf.nn.leaky_relu,use_bias=True)
-
-        ''' w[15] was [1024] , now its [1,1024]. Which one is correct?'''
-        # [N,1024]
 
 
     with tf.name_scope("GRU"):
@@ -155,20 +140,20 @@ def gru():
         prev_hidden = p_H
 
         update_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
-        update_dense = tf.reshape(update_dense, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
+        update_dense = tf.reshape(update_dense, [4, 4, 4, -1, 128]) 
 
         reset_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
-        reset_dense = tf.reshape(reset_dense, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
+        reset_dense = tf.reshape(reset_dense, [4, 4, 4, -1, 128]) 
 
         hidden_dense = tf.layers.dense(fc7,8192,activation=tf.nn.leaky_relu,use_bias=True)
-        hidden_dense = tf.reshape(hidden_dense, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
+        hidden_dense = tf.reshape(hidden_dense, [4, 4, 4, -1, 128])  
 
         t_x_s_update = tf.nn.conv3d(prev_hidden, weights['update_gate'], strides=[1, 1, 1, 1, 1], padding="SAME") + update_dense
-        t_x_s_update = tf.add(t_x_s_update, biases['update_gate']) #Bias
+        t_x_s_update = tf.add(t_x_s_update, biases['update_gate']) 
         update_gate = tf.sigmoid(t_x_s_update)
 
         t_x_s_reset = tf.nn.conv3d(prev_hidden, weights['reset_gate'], strides=[1, 1, 1, 1, 1], padding="SAME") + reset_dense
-        t_x_s_reset = tf.add(t_x_s_reset, biases['reset_gate']) #Bias
+        t_x_s_reset = tf.add(t_x_s_reset, biases['reset_gate'])
         reset_gate = tf.sigmoid(t_x_s_reset)
 
 
@@ -185,7 +170,6 @@ def decoder():
 
 
     with tf.name_scope("Decoder"):
-
 
         unpool7 = unpool(G)
         conv7a = tf.nn.conv3d(unpool7,weights['conv7a'],strides=[1,1,1,1,1],padding="SAME")
@@ -208,13 +192,11 @@ def decoder():
 
         conv11a = tf.nn.conv3d(conv10a,weights['conv11a'],strides=[1,1,1,1,1],padding="SAME")
         conv11a = tf.add(conv11a,biases['conv11a'])
-        ''' (32, 32, 32, 1, 2) '''
-
 
         loss_tmp = 0
 
-        exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
-        sum_exp_x = tf.reduce_sum(exp_x, reduction_indices=[4], keepdims=True)  # 32, 32, 32, 1, 1
+        exp_x = tf.exp(conv11a) 
+        sum_exp_x = tf.reduce_sum(exp_x, reduction_indices=[4], keepdims=True) 
 
         for j in range(1,batch_size+1):
 
@@ -238,13 +220,8 @@ optimizer = tf.train.AdamOptimizer(5e-5).minimize(loss)
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 
-# Start Training
-# Start a new TF session
 with tf.Session() as sess:
 
-    #sess = tf_debug.TensorBoardDebugWrapperSession(sess, "Berkan-MacBook-Pro.local:4334")
-
-    # Run the initializer
     sess.run(init)
 
     merged = tf.summary.merge_all()
@@ -275,8 +252,6 @@ with tf.Session() as sess:
                 ims = tf.convert_to_tensor(image)
                 ims = tf.reshape(ims,[-1,127,127,3])
                 ims = ims.eval()
-                #ims = tf.ones([1,127,127,3])
-                #ims = ims.eval()
 
                 prev_s = sess.run([gru_op], feed_dict={X: ims, p_H: prev_state})
                 prev_s = np.array(prev_s)
@@ -301,12 +276,6 @@ with tf.Session() as sess:
         currentDT = datetime.datetime.now()
         print(str(currentDT) + " Batch: " + str(no) + " Loss: " + str(l))
 
-        '''
-        o = tf.convert_to_tensor(o)
-        outputs = tf.contrib.layers.softmax(o)
-        pred = tf.argmax(outputs, axis=4).eval().astype(np.float32)
-        voxel.voxel2obj("test_pred_" + str(no) + ".obj", pred[:, :, :, 0])
-        '''
         exp_x = tf.exp(o)  # 32, 32, 32, 1 ,2
         sum_exp_x = tf.reduce_sum(exp_x, reduction_indices=[4], keepdims=True)  # 32, 32, 32, 1, 1
 
@@ -315,9 +284,7 @@ with tf.Session() as sess:
         pred = pred.eval()
 
         pred_name = "test_pred_" + str(no) + ".obj"
-        pred_name2 = "test_pred_" + str(no) + "_XD.obj"
 
-        voxel.voxel2obj(pred_name2, pred[:, :, :, 0, 1])
         voxel.voxel2obj(pred_name, pred[:, :, :, 0, 0])
 
         x_train = dataset.train_data()

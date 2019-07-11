@@ -51,12 +51,13 @@ weights = {
     'conv6b': tf.Variable(initializer([3, 3, n_convfilter[5], n_convfilter[5]])),
 
     'fc7': tf.Variable(initializer([1, n_fc_filters[0]])),
+
     # Gru Part
     'w_update': tf.Variable(initializer([1024, 8192])),  #
     'update_gate': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
     'reset_gate': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
     'tanh_reset': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[0]])),
-    # 'prev_s': tf.Variable(tf.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])),
+    
     # Decoder Part
     'conv7a': tf.Variable(initializer([3, 3, 3, n_deconvfilter[0], n_deconvfilter[1]])),
     'conv7b': tf.Variable(initializer([3, 3, 3, n_deconvfilter[1], n_deconvfilter[1]])),
@@ -145,7 +146,7 @@ def unpool(x):  # unpool_3d_zero_filled
 
 def gru():
     with tf.name_scope("Encoder"):
-        # Convolutional Layer #1
+
         conv1a = tf.nn.conv2d(input=X, filter=weights['conv1a'], strides=[1, 1, 1, 1], padding="SAME")
         conv1a = tf.add(conv1a, biases['conv1a'])
         conv1a = tf.nn.leaky_relu(conv1a, alpha=0.01)
@@ -153,8 +154,6 @@ def gru():
         conv1b = tf.nn.conv2d(input=conv1a, filter=weights['conv1b'], strides=[1, 1, 1, 1], padding="SAME")
         conv1b = tf.nn.max_pool(conv1b, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
         conv1b = tf.nn.leaky_relu(conv1b, alpha=0.01)
-
-        # [1, 64, 64, 96]
 
         # Convolutional Layer #2
         conv2a = tf.nn.conv2d(input=conv1b, filter=weights['conv2a'], strides=[1, 1, 1, 1], padding="SAME")
@@ -197,7 +196,6 @@ def gru():
         conv4a = tf.nn.conv2d(input=conv3c, filter=weights['conv4a'], strides=[1, 1, 1, 1], padding="SAME")
         conv4a = tf.add(conv4a, biases['conv4a'])
         conv4a = tf.nn.leaky_relu(conv4a, alpha=0.01)
-        ''' !!!TODO!!!  (1, 8, 8, 256)   ->>>      Paper result size is (1, 9, 9, 256)'''
 
 
         conv4b = tf.nn.conv2d(input=conv4a, filter=weights['conv4b'], strides=[1, 1, 1, 1], padding="SAME")
@@ -236,8 +234,6 @@ def gru():
 
         conv6b = tf.nn.max_pool(conv6b, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
      
-
-
         # Flatten Layer
         flat7 = tf.layers.flatten(conv6b)
 
@@ -249,15 +245,15 @@ def gru():
     with tf.name_scope("GRU"):
         prev_hidden = p_H
 
-        fc_layer = tf.matmul(fc7, weights['w_update'])  # [1,1024]x[1024,8192] // FC LAYER FOR UPDATE GATE
-        fc_layer = tf.reshape(fc_layer, [4, 4, 4, -1, 128])  # [1,4,128,4,4]
+        fc_layer = tf.matmul(fc7, weights['w_update']) 
+        fc_layer = tf.reshape(fc_layer, [4, 4, 4, -1, 128]) 
 
         t_x_s_update = tf.nn.conv3d(prev_hidden, weights['update_gate'], strides=[1, 1, 1, 1, 1],
                                     padding="SAME") + fc_layer
-        t_x_s_update = tf.add(t_x_s_update, biases['update_gate'])  # Bias
+        t_x_s_update = tf.add(t_x_s_update, biases['update_gate']) 
         t_x_s_reset = tf.nn.conv3d(prev_hidden, weights['reset_gate'], strides=[1, 1, 1, 1, 1],
                                    padding="SAME") + fc_layer
-        t_x_s_reset = tf.add(t_x_s_reset, biases['reset_gate'])  # Bias
+        t_x_s_reset = tf.add(t_x_s_reset, biases['reset_gate']) 
 
         update_gate = tf.sigmoid(t_x_s_update)
 
@@ -266,7 +262,7 @@ def gru():
 
         rs = reset_gate * prev_hidden
         t_x_rs = tf.nn.conv3d(rs, weights['tanh_reset'], strides=[1, 1, 1, 1, 1], padding="SAME") + fc_layer
-        t_x_rs = tf.add(t_x_rs, biases['tanh_reset'])  # Bias
+        t_x_rs = tf.add(t_x_rs, biases['tanh_reset'])  
         tanh_t_x_rs = tf.tanh(t_x_rs)
 
         gru_out = update_gate * prev_hidden + complement_update_gate * tanh_t_x_rs
@@ -277,7 +273,7 @@ def gru():
 # Building the decoder
 def decoder():
     with tf.name_scope("Decoder"):
-        # x = tf.reshape(x,[4,4,4,1,2])
+
         unpool7 = unpool(G)
 
         conv7a = tf.nn.conv3d(unpool7, weights['conv7a'], strides=[1, 1, 1, 1, 1], padding="SAME")
@@ -336,15 +332,11 @@ def decoder():
         conv10c = tf.add(conv10c, biases['conv10c'])       
         conv10c = tf.nn.leaky_relu(conv10c, alpha=0.01)     
 
-
-
         conv11a = tf.nn.conv3d(conv10c, weights['conv11a'], strides=[1, 1, 1, 1, 1], padding="SAME")
         conv11a = tf.add(conv11a, biases['conv11a'])
-        ''' (32, 32, 32, 1, 2) '''
 
-
-        exp_x = tf.exp(conv11a)  # 32, 32, 32, 1 ,2
-        sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
+        exp_x = tf.exp(conv11a)  
+        sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True) 
 
         loss = tf.reduce_mean(
             tf.reduce_sum(-Y * conv11a, axis=4, keepdims=True) +
@@ -358,16 +350,11 @@ def decoder():
 gru_op = gru()
 output, loss = decoder()
 
-
 optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
-
-# Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 
 with tf.Session() as sess:
-    # sess = tf_debug.TensorBoardDebugWrapperSession(sess, "Berkan-MacBook-Pro.local:4334")
-
-    # Run the initializer
+    
     sess.run(init)
 
     merged = tf.summary.merge_all()
@@ -386,9 +373,6 @@ with tf.Session() as sess:
         for image_hash in x_train.keys():
 
             i += 1
-
-            # prev_state = np.zeros([n_gru_vox, n_gru_vox, n_gru_vox, 1, n_deconvfilter[0]])
-
             images = x_train[image_hash]
             shuffle(images)  # Shuffle views
             for image in images:
@@ -422,8 +406,6 @@ with tf.Session() as sess:
                 sum_exp_x = tf.reduce_sum(exp_x, axis=4, keepdims=True)  # 32, 32, 32, 1, 1
 
                 pred = exp_x / sum_exp_x
-
-                # pred = 1 / (1 + tf.exp(tf.ones_like(o)-1))
 
                 pred = pred.eval()
 
